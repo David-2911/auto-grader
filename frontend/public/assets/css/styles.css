@@ -1,0 +1,7 @@
+/* ...existing code... */
+
+.nav-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
