@@ -1,0 +1,110 @@
+config:
+  target: 'http://localhost:5000'
+  phases:
+    - duration: 120
+      arrivalRate: 10
+      name: "File upload warm-up"
+    
+    - duration: 300
+      arrivalRate: 20
+      name: "Standard file upload load"
+    
+    - duration: 240
+      arrivalRate: 50
+      name: "High file upload stress"
+    
+    - duration: 180
+      arrivalRate: 100
+      name: "Maximum file upload stress"
+
+  processor: "./processors/file-upload-processor.js"
+  
+  # File upload specific thresholds
+  ensure:
+    - http.response_time.p95: 30000  # 30s for large file uploads
+    - http.response_time.p99: 60000  # 60s max for any upload
+    - http.codes.200: 0.85           # 85% success rate for file uploads
+    - http.codes.413: 0.05           # Max 5% payload too large errors
+    - http.codes.500: 0.02           # Max 2% server errors
+
+scenarios:
+  - name: "Small File Upload Stress"
+    weight: 50
+    flow:
+      # Login first
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher@test.com"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - think: 1
+      
+      # Upload small PDF (simulated)
+      - post:
+          url: "/api/assignments/submit"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+            Content-Type: "multipart/form-data"
+          form:
+            assignmentId: "test-assignment-{{ $randomNumber() }}"
+            studentId: "student-{{ $randomNumber() }}"
+            submissionFile: "@test-files/small-submission.pdf"
+  
+  - name: "Large File Upload Stress"
+    weight: 30
+    flow:
+      # Login first
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher@test.com"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - think: 2
+      
+      # Upload large PDF (simulated)
+      - post:
+          url: "/api/assignments/submit"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+            Content-Type: "multipart/form-data"
+          form:
+            assignmentId: "test-assignment-{{ $randomNumber() }}"
+            studentId: "student-{{ $randomNumber() }}"
+            submissionFile: "@test-files/large-submission.pdf"
+
+  - name: "Multiple File Upload Stress"
+    weight: 20
+    flow:
+      # Login first
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher@test.com"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - think: 1
+      
+      # Upload multiple files rapidly
+      - loop:
+          - post:
+              url: "/api/assignments/submit"
+              headers:
+                Authorization: "Bearer {{ authToken }}"
+                Content-Type: "multipart/form-data"
+              form:
+                assignmentId: "test-assignment-{{ $randomNumber() }}"
+                studentId: "student-{{ $randomNumber() }}"
+                submissionFile: "@test-files/medium-submission-{{ $randomNumber() }}.pdf"
+          - think: 0.5
+        count: 5

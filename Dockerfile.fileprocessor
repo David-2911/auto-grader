@@ -1,0 +1,43 @@
+# Dockerfile for File Processing Service
+FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    imagemagick \
+    libmagickwand-dev \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY backend/ml/requirements.txt ./requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir celery redis
+
+# Copy file processing utilities
+COPY backend/ml/utils/ ./utils/
+COPY deployment/file-processor/ ./
+
+# Create necessary directories
+RUN mkdir -p storage temp logs processed
+
+# Create non-root user
+RUN useradd -m -u 1001 processor && \
+    chown -R processor:processor /app
+
+USER processor
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python health_check.py || exit 1
+
+# Start file processor worker
+CMD ["celery", "worker", "-A", "file_processor", "--loglevel=info", "--concurrency=2"]

@@ -1,0 +1,111 @@
+config:
+  target: 'http://localhost:5000'
+  phases:
+    - duration: 90
+      arrivalRate: 3
+      name: "Grading warm-up"
+    
+    - duration: 240
+      arrivalRate: 5
+      rampTo: 15
+      name: "Grading ramp-up"
+    
+    - duration: 360
+      arrivalRate: 15
+      name: "Sustained grading load"
+    
+    - duration: 180
+      arrivalRate: 15
+      rampTo: 2
+      name: "Cool-down"
+
+  processor: "./processors/grading-processor.js"
+  
+  ensure:
+    - http.response_time.p95: 15000  # ML operations can be slower
+    - http.response_time.p99: 30000
+    - http.codes.200: 0.85
+    - http.codes.500: 0.02
+
+scenarios:
+  - name: "Automated Grading Load Test"
+    weight: 70
+    flow:
+      # Teacher login
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher{{ $randomNumber() }}@test.com"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      # Get submissions to grade
+      - get:
+          url: "/api/assignments/submissions/pending"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "submissionId"
+            - json: "$[0].assignmentId"
+              as: "assignmentId"
+      
+      - think: 3
+      
+      # Trigger automated grading
+      - post:
+          url: "/api/grading/auto-grade"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            submissionId: "{{ submissionId }}"
+            assignmentId: "{{ assignmentId }}"
+            gradingMethod: "ml_automated"
+      
+      - think: 10
+      
+      # Check grading results
+      - get:
+          url: "/api/grading/{{ submissionId }}/results"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  - name: "Manual Grading Load Test"
+    weight: 30
+    flow:
+      # Teacher login
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher{{ $randomNumber() }}@test.com"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      # Get submissions to grade manually
+      - get:
+          url: "/api/assignments/submissions/pending"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "submissionId"
+      
+      - think: 5
+      
+      # Submit manual grade
+      - post:
+          url: "/api/grading/manual-grade"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            submissionId: "{{ submissionId }}"
+            grade: "{{ $randomNumber(60, 100) }}"
+            feedback: "Good work on this assignment. Consider improving..."
+            gradingCriteria:
+              accuracy: "{{ $randomNumber(7, 10) }}"
+              completeness: "{{ $randomNumber(8, 10) }}"
+              presentation: "{{ $randomNumber(6, 10) }}"

@@ -1,0 +1,368 @@
+const path = require('path');
+const { spawn } = require('child_process');
+const { logger } = require('../../src/utils/logger');
+const MLModel = require('../../src/models/ml.model');
+
+/**
+ * Service for handling machine learning operations
+ */
+class MLService {
+  /**
+   * Extract text from a PDF file using OCR
+   * @param {string} pdfPath - Path to the PDF file
+   * @returns {Promise<string>} - Extracted text
+   */
+  static async extractTextFromPDF(pdfPath) {
+    return new Promise((resolve, reject) => {
+      const pythonScript = path.join(__dirname, '../utils/extract_text.py');
+      
+      const process = spawn('python3', [pythonScript, pdfPath]);
+      
+      let result = '';
+      let error = '';
+      
+      process.stdout.on('data', (data) => {
+        result += data.toString();
+      });
+      
+      process.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      process.on('close', (code) => {
+        if (code !== 0) {
+          logger.error(`OCR process exited with code ${code}: ${error}`);
+          reject(new Error(`OCR process failed: ${error}`));
+        } else {
+          resolve(result.trim());
+        }
+      });
+    });
+  }
+  
+  /**
+   * Grade a submission using the ML model
+   * @param {Object} options - Grading options
+   * @param {string} options.submissionText - The text of the submission
+   * @param {string} options.expectedAnswer - The expected answer
+   * @param {string} options.modelType - Type of model to use (similarity, transformer, or ensemble)
+   * @param {string} options.assignmentId - ID of the assignment
+   * @param {string} options.submissionId - ID of the submission
+   * @returns {Promise<Object>} - Grading result with score and feedback
+   */
+  static async gradeSubmission(options) {
+    const startTime = Date.now();
+    
+    try {
+      const { 
+        submissionText, 
+        expectedAnswer, 
+        modelType = 'ensemble',
+        assignmentId,
+        submissionId,
+        feedbackDetail = 'standard' // basic, standard, or detailed
+      } = options;
+      
+      // Get the active model based on type
+      const model = await MLModel.getActiveByType(modelType);
+      
+      if (!model) {
+        throw new Error(`No active model found for type: ${modelType}`);
+      }
+      
+      const pythonScript = path.join(__dirname, '../utils/grade_engine.py');
+      
+      const process = spawn('python3', [
+        pythonScript,
+        '--submission', submissionText,
+        '--expected', expectedAnswer,
+        '--model-path', path.join(MLModel.getModelsDirectory(), model.model_path),
+        '--model-type', modelType,
+        '--feedback-detail', feedbackDetail
+      ]);
+      
+      let result = '';
+      let error = '';
+      
+      process.stdout.on('data', (data) => {
+        result += data.toString();
+      });
+      
+      process.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      process.on('close', async (code) => {
+        const processingTime = Date.now() - startTime;
+        
+        if (code !== 0) {
+          logger.error(`Grading process exited with code ${code}: ${error}`);
+          
+          // Record the error in model usage
+          if (model.id && submissionId) {
+            await MLModel.recordUsage({
+              modelId: model.id,
+              submissionId,
+              processingTimeMs: processingTime,
+              resultConfidence: 0,
+              predictionScore: 0,
+              status: 'error',
+              errorMessage: error.substring(0, 255) // Limit error message length
+            });
+          }
+          
+          throw new Error(`Grading process failed: ${error}`);
+        }
+        
+        try {
+          const gradingResult = JSON.parse(result.trim());
+          
+          // Record successful model usage
+          if (model.id && submissionId) {
+            await MLModel.recordUsage({
+              modelId: model.id,
+              submissionId,
+              processingTimeMs: processingTime,
+              resultConfidence: gradingResult.confidence || 0,
+              predictionScore: gradingResult.score || 0,
+              status: 'success'
+            });
+          }
+          
+          return {
+            ...gradingResult,
+            modelId: model.id,
+            modelName: model.name,
+            modelVersion: model.version,
+            processingTimeMs: processingTime
+          };
+        } catch (err) {
+          logger.error('Failed to parse grading result:', err);
+          
+          // Record the error in model usage
+          if (model.id && submissionId) {
+            await MLModel.recordUsage({
+              modelId: model.id,
+              submissionId,
+              processingTimeMs: processingTime,
+              resultConfidence: 0,
+              predictionScore: 0,
+              status: 'error',
+              errorMessage: 'Failed to parse grading result'
+            });
+          }
+          
+          throw new Error(`Failed to parse grading result: ${err.message}`);
+        }
+      });
+    } catch (error) {
+      logger.error('Error in grade submission:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Analyze code submission
+   * @param {string} codeText - The submitted code
+   * @param {string} language - The programming language
+   * @param {string} expectedFunctionality - Expected functionality description
+   * @returns {Promise<Object>} - Code analysis result
+   */
+  static async analyzeCode(codeText, language, expectedFunctionality = '') {
+    return new Promise((resolve, reject) => {
+      const pythonScript = path.join(__dirname, '../utils/analyze_code.py');
+      
+      const args = [
+        pythonScript,
+        '--code', codeText,
+        '--language', language
+      ];
+      
+      if (expectedFunctionality) {
+        args.push('--expected', expectedFunctionality);
+      }
+      
+      const process = spawn('python3', args);
+      
+      let result = '';
+      let error = '';
+      
+      process.stdout.on('data', (data) => {
+        result += data.toString();
+      });
+      
+      process.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      process.on('close', (code) => {
+        if (code !== 0) {
+          logger.error(`Code analysis process exited with code ${code}: ${error}`);
+          reject(new Error(`Code analysis failed: ${error}`));
+        } else {
+          try {
+            const analysisResult = JSON.parse(result.trim());
+            resolve(analysisResult);
+          } catch (err) {
+            reject(new Error(`Failed to parse code analysis result: ${err.message}`));
+          }
+        }
+      });
+    });
+  }
+  
+  /**
+   * Train a new model
+   * @param {Object} options - Training options
+   * @param {string} options.modelType - Type of model to train (similarity, transformer, ensemble)
+   * @param {string} options.name - Name of the model
+   * @param {string} options.description - Description of the model
+   * @param {Array} options.trainingData - Array of training examples (optional)
+   * @returns {Promise<Object>} - Trained model info
+   */
+  static async trainModel(options) {
+    return new Promise((resolve, reject) => {
+      const { 
+        modelType, 
+        name, 
+        description, 
+        trainingData = null,
+        featureSet = 'default'
+      } = options;
+      
+      const pythonScript = path.join(__dirname, '../utils/train_models.py');
+      
+      const args = [
+        pythonScript,
+        '--model-type', modelType,
+        '--name', name,
+        '--description', description,
+        '--feature-set', featureSet
+      ];
+      
+      // If training data is provided, write to a temp file and pass the path
+      let tempFilePath = null;
+      if (trainingData) {
+        tempFilePath = path.join(
+          require('os').tmpdir(), 
+          `training_data_${Date.now()}.json`
+        );
+        require('fs').writeFileSync(
+          tempFilePath, 
+          JSON.stringify(trainingData), 
+          'utf8'
+        );
+        args.push('--training-data', tempFilePath);
+      }
+      
+      const process = spawn('python3', args);
+      
+      let result = '';
+      let error = '';
+      
+      process.stdout.on('data', (data) => {
+        result += data.toString();
+      });
+      
+      process.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      process.on('close', async (code) => {
+        // Clean up temp file if it was created
+        if (tempFilePath && require('fs').existsSync(tempFilePath)) {
+          require('fs').unlinkSync(tempFilePath);
+        }
+        
+        if (code !== 0) {
+          logger.error(`Model training process exited with code ${code}: ${error}`);
+          reject(new Error(`Model training failed: ${error}`));
+        } else {
+          try {
+            const trainingResult = JSON.parse(result.trim());
+            
+            // Save model metadata to database
+            const model = await MLModel.create({
+              name: trainingResult.name,
+              description: trainingResult.description,
+              version: trainingResult.version,
+              modelPath: trainingResult.model_path,
+              modelType: trainingResult.model_type,
+              featureSet: trainingResult.feature_set,
+              trainingAccuracy: trainingResult.training_accuracy,
+              validationAccuracy: trainingResult.validation_accuracy,
+              accuracyMetrics: trainingResult.metrics,
+              hyperparameters: trainingResult.hyperparameters
+            });
+            
+            resolve({
+              ...trainingResult,
+              id: model.id
+            });
+          } catch (err) {
+            reject(new Error(`Failed to parse or save training result: ${err.message}`));
+          }
+        }
+      });
+    });
+  }
+  
+  /**
+   * Generate a notebook with submission feedback
+   * @param {string} submissionText - The text of the submission
+   * @param {Object} gradingResult - The grading result
+   * @param {string} outputPath - Path to save the notebook
+   * @returns {Promise<string>} - Path to the generated notebook
+   */
+  static async generateFeedbackNotebook(submissionText, gradingResult, outputPath) {
+    return new Promise((resolve, reject) => {
+      const pythonScript = path.join(__dirname, '../utils/feedback_generator.py');
+      
+      const process = spawn('python3', [
+        pythonScript,
+        '--submission', submissionText,
+        '--grading-result', JSON.stringify(gradingResult),
+        '--output', outputPath,
+        '--format', 'notebook'
+      ]);
+      
+      let result = '';
+      let error = '';
+      
+      process.stdout.on('data', (data) => {
+        result += data.toString();
+      });
+      
+      process.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+      
+      process.on('close', (code) => {
+        if (code !== 0) {
+          logger.error(`Feedback generation process exited with code ${code}: ${error}`);
+          reject(new Error(`Feedback generation failed: ${error}`));
+        } else {
+          resolve(outputPath);
+        }
+      });
+    });
+  }
+  
+  /**
+   * Run A/B test between two models
+   * @param {number} modelAId - First model ID
+   * @param {number} modelBId - Second model ID
+   * @param {number} testSize - Test size
+   * @returns {Promise<Object>} - Test results
+   */
+  static async runABTest(modelAId, modelBId, testSize = 100) {
+    try {
+      return await MLModel.runABTest(modelAId, modelBId, testSize);
+    } catch (error) {
+      logger.error('Error running A/B test:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = MLService;

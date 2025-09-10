@@ -1,0 +1,91 @@
+config:
+  target: 'http://localhost:5000'
+  phases:
+    # Stress test phases - pushing system limits
+    - duration: 60
+      arrivalRate: 50
+      name: "Initial load"
+    
+    - duration: 300
+      arrivalRate: 50
+      rampTo: 200
+      name: "Ramp to stress level"
+    
+    - duration: 300
+      arrivalRate: 200
+      name: "Sustained stress"
+    
+    - duration: 180
+      arrivalRate: 200
+      rampTo: 500
+      name: "Peak stress"
+    
+    - duration: 120
+      arrivalRate: 500
+      name: "Maximum stress"
+    
+    - duration: 240
+      arrivalRate: 500
+      rampTo: 10
+      name: "Recovery"
+
+  processor: "./processors/stress-processor.js"
+  
+  # Stress test thresholds - more lenient for breaking point testing
+  ensure:
+    - http.response_time.p95: 10000  # Allow higher response times under stress
+    - http.response_time.p99: 20000
+    - http.codes.200: 0.80           # 80% success rate acceptable under stress
+    - http.codes.500: 0.05           # Max 5% server errors under stress
+
+scenarios:
+  - name: "Concurrent User Stress Test"
+    weight: 100
+    flow:
+      # Register new user
+      - post:
+          url: "/api/auth/register"
+          json:
+            email: "stress{{ $randomNumber() }}@test.com"
+            password: "StressTest123!"
+            firstName: "Stress"
+            lastName: "User{{ $randomNumber() }}"
+            role: "student"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+            - json: "$.user.id"
+              as: "userId"
+      
+      - think: 1
+      
+      # Login
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "stress{{ $randomNumber() }}@test.com"
+            password: "StressTest123!"
+          capture:
+            - json: "$.token"
+              as: "loginToken"
+      
+      - think: 2
+      
+      # Multiple rapid requests to stress the system
+      - loop:
+          - get:
+              url: "/api/auth/profile"
+              headers:
+                Authorization: "Bearer {{ loginToken }}"
+          - get:
+              url: "/api/dashboard/stats"
+              headers:
+                Authorization: "Bearer {{ loginToken }}"
+          - think: 0.5
+        count: 10
+      
+      # Logout
+      - post:
+          url: "/api/auth/logout"
+          headers:
+            Authorization: "Bearer {{ loginToken }}"

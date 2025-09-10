@@ -1,0 +1,112 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const helmet = require('helmet');
+const compression = require('compression');
+const morgan = require('morgan');
+
+// Load configuration
+const config = require('./src/config/config');
+const { setupSwagger } = require('./src/config/swagger');
+const { pool, testConnection } = require('./src/config/database');
+const { logger, httpLogStream } = require('./src/utils/logger');
+
+// Load middleware
+const { errorHandler, notFoundHandler } = require('./src/utils/error.util');
+const { requestLogger, activityLogger } = require('./src/middleware/logging.middleware');
+const { rateLimiter } = require('./src/middleware/rate-limit.middleware');
+const responseMiddleware = require('./src/middleware/response.middleware');
+
+// Initialize express app
+const app = express();
+
+// Set up middleware
+app.use(helmet()); // Security headers
+app.use(cors({
+  origin: config.server.corsOrigin,
+  credentials: true
+}));
+app.use(compression()); // Compress responses
+app.use(express.json()); // Parse JSON bodies
+app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Logging
+app.use(morgan('combined', { stream: httpLogStream }));
+app.use(requestLogger);
+
+// Custom response formatter
+app.use(responseMiddleware);
+
+// Rate limiting
+app.use(rateLimiter());
+
+// Serve static files
+app.use('/storage', express.static(path.join(__dirname, 'storage')));
+
+// Make database connection available
+app.locals.dbPool = pool;
+
+// Activity logging (after parsing the body, before routes)
+app.use(activityLogger);
+
+// Import routes
+const authRoutes = require('./src/routes/auth.routes');
+const userRoutes = require('./src/routes/user.routes');
+const courseRoutes = require('./src/routes/course.routes');
+const assignmentRoutes = require('./src/routes/assignment.routes');
+const submissionRoutes = require('./src/routes/submission.routes');
+const adminRoutes = require('./src/routes/admin.routes');
+const graderRoutes = require('./src/routes/grader.routes');
+
+// API routes with versioning
+const apiPrefix = config.server.apiPrefix;
+app.use(`${apiPrefix}/auth`, authRoutes);
+app.use(`${apiPrefix}/users`, userRoutes);
+app.use(`${apiPrefix}/courses`, courseRoutes);
+app.use(`${apiPrefix}/assignments`, assignmentRoutes);
+app.use(`${apiPrefix}/submissions`, submissionRoutes);
+app.use(`${apiPrefix}/admin`, adminRoutes);
+app.use(`${apiPrefix}/grader`, graderRoutes);
+
+// Health check endpoint
+app.get(`${apiPrefix}/health`, (req, res) => {
+  res.success({
+    status: 'UP',
+    timestamp: new Date(),
+    environment: config.env,
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage()
+  }, 'Service is healthy');
+});
+
+// Set up Swagger documentation
+setupSwagger(app);
+
+// 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
+
+// Start server
+const PORT = config.server.port;
+const server = app.listen(PORT, async () => {
+  logger.info(`Server running in ${config.env} mode on port ${PORT}`);
+  
+  // Test database connection
+  const dbConnected = await testConnection();
+  if (dbConnected) {
+    logger.info('Database connection established successfully');
+  } else {
+    logger.error('Database connection failed');
+  }
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  logger.error('Unhandled Promise Rejection:', err);
+  // Close server & exit process
+  server.close(() => process.exit(1));
+});
+
+module.exports = app; // For testing purposes

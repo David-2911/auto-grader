@@ -1,0 +1,104 @@
+config:
+  target: 'http://localhost:5000'
+  phases:
+    - duration: 60
+      arrivalRate: 50
+      name: "Stress ramp-up"
+    - duration: 300
+      arrivalRate: 100
+      name: "Sustained stress"
+    - duration: 120
+      arrivalRate: 200
+      name: "Peak stress"
+    - duration: 180
+      arrivalRate: 150
+      name: "Cool down"
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+
+scenarios:
+  - name: "High Volume File Uploads"
+    weight: 40
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "student{{ $randomInt(1, 1000) }}@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+      - loop:
+          - post:
+              url: "/api/assignments/1/submissions"
+              headers:
+                Authorization: "Bearer {{ accessToken }}"
+              json:
+                submissionText: "{{ $randomString(1000) }}"
+          - think: 1
+        count: 5
+
+  - name: "Concurrent User Sessions"
+    weight: 35
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "user{{ $randomInt(1, 2000) }}@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+      - parallel:
+          - get:
+              url: "/api/assignments"
+              headers:
+                Authorization: "Bearer {{ accessToken }}"
+          - get:
+              url: "/api/auth/user"
+              headers:
+                Authorization: "Bearer {{ accessToken }}"
+          - get:
+              url: "/api/performance/status"
+              headers:
+                Authorization: "Bearer {{ accessToken }}"
+      - think: 2
+
+  - name: "Database Stress Operations"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "admin@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+      - loop:
+          - get:
+              url: "/api/performance/api-stats"
+              headers:
+                Authorization: "Bearer {{ accessToken }}"
+          - get:
+              url: "/api/performance/metrics"
+              headers:
+                Authorization: "Bearer {{ accessToken }}"
+          - think: 1
+        count: 10
+
+# Stress test thresholds (more lenient than load test)
+expect:
+  thresholds:
+    - http.response_time:
+        p95: 5000  # 95% of requests should complete within 5s
+        p99: 10000  # 99% of requests should complete within 10s
+    - http.errors: 0.05  # Error rate should be less than 5%
+    - http.request_rate: 30  # Should handle at least 30 requests/second under stress
+
+# Monitor system resources during stress test
+plugins:
+  expect: {}
+  metrics-by-endpoint:
+    useOnlyRequestNames: true

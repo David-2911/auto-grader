@@ -1,0 +1,178 @@
+# Prometheus Configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'autograder'
+    environment: '${ENVIRONMENT}'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Auto-Grader Backend
+  - job_name: 'autograder-backend'
+    static_configs:
+      - targets: ['backend:5000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Auto-Grader Frontend (Nginx metrics)
+  - job_name: 'autograder-frontend'
+    static_configs:
+      - targets: ['frontend:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 30s
+
+  # MySQL Database
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql:3306']
+    params:
+      target: ['mysql:3306']
+    scrape_interval: 30s
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # Node Exporter (System Metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # ML Service
+  - job_name: 'ml-service'
+    static_configs:
+      - targets: ['ml-service:5001']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+
+  # File Processing Service
+  - job_name: 'file-processor'
+    static_configs:
+      - targets: ['file-processor:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Custom Application Metrics
+  - job_name: 'autograder-custom-metrics'
+    static_configs:
+      - targets: ['backend:5000']
+    metrics_path: '/api/performance/prometheus-metrics'
+    scrape_interval: 30s
+    params:
+      format: ['prometheus']
+
+# Recording rules for performance optimization
+recording_rules:
+  - name: autograder.performance
+    rules:
+      # Request rate per minute
+      - record: autograder:request_rate_5m
+        expr: rate(http_requests_total[5m])
+      
+      # Error rate per minute
+      - record: autograder:error_rate_5m
+        expr: rate(http_requests_total{status=~"4..|5.."}[5m]) / rate(http_requests_total[5m])
+      
+      # Response time percentiles
+      - record: autograder:response_time_p95_5m
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+      
+      - record: autograder:response_time_p99_5m
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+      
+      # Database query performance
+      - record: autograder:db_query_rate_5m
+        expr: rate(mysql_queries_total[5m])
+      
+      - record: autograder:db_slow_queries_rate_5m
+        expr: rate(mysql_slow_queries_total[5m])
+      
+      # Cache performance
+      - record: autograder:cache_hit_rate_5m
+        expr: rate(redis_cache_hits_total[5m]) / (rate(redis_cache_hits_total[5m]) + rate(redis_cache_misses_total[5m]))
+      
+      # System resources
+      - record: autograder:cpu_usage_5m
+        expr: 1 - rate(node_cpu_seconds_total{mode="idle"}[5m])
+      
+      - record: autograder:memory_usage_ratio
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes
+      
+      - record: autograder:disk_usage_ratio
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes
+      
+      # File processing metrics
+      - record: autograder:file_processing_queue_size
+        expr: file_processing_queue_size
+      
+      - record: autograder:file_processing_rate_5m
+        expr: rate(file_processing_completed_total[5m])
+      
+      # ML service metrics
+      - record: autograder:ml_prediction_rate_5m
+        expr: rate(ml_predictions_total[5m])
+      
+      - record: autograder:ml_prediction_latency_p95_5m
+        expr: histogram_quantile(0.95, rate(ml_prediction_duration_seconds_bucket[5m]))
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # ML Service
+  - job_name: 'ml-service'
+    static_configs:
+      - targets: ['ml-service:5001']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+
+  # Node Exporter (System metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+  # cAdvisor (Container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+
+  # Blackbox Exporter (External monitoring)
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://frontend:80/health
+        - http://backend:5000/api/health
+        - http://ml-service:5001/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

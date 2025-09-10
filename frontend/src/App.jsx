@@ -1,53 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter } from 'react-router-dom';
+import { Provider } from 'react-redux';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './App.css';
 
-// Layout components
-import Header from './components/layout/Header';
-import Footer from './components/layout/Footer';
+// Store and theme
+import { store } from './store';
+import { createAppTheme } from './styles/theme';
+import './styles/globals.css';
 
-// Authentication pages
-import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
-import ForgotPassword from './pages/auth/ForgotPassword';
+// Router
+import AppRouter from './routes/AppRouter';
 
-// Dashboard pages
-import StudentDashboard from './pages/dashboard/StudentDashboard';
-import TeacherDashboard from './pages/dashboard/TeacherDashboard';
-import AdminDashboard from './pages/dashboard/AdminDashboard';
-
-// Protected route component
-import ProtectedRoute from './components/auth/ProtectedRoute';
-
-// Authentication context
-import { AuthProvider } from './context/AuthContext';
+// Create React Query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 const App = () => {
+  const theme = createAppTheme('light'); // Default theme, will be overridden by store
+
   return (
-    <AuthProvider>
-      <div className="app-container">
-        <Header />
-        <main className="main-content">
-          <ToastContainer position="top-right" autoClose={3000} />
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Navigate to="/login" />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            
-            {/* Protected routes */}
-            <Route 
-              path="/student/*" 
-              element={
-                <ProtectedRoute allowedRoles={['student']}>
-                  <StudentDashboard />
-                </ProtectedRoute>
-              } 
-            />
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <BrowserRouter>
+            <div className="app">
+              <AppRouter />
+              <ToastContainer
+                position="top-right"
+                autoClose={5000}
+                hideProgressBar={false}
+                newestOnTop={false}
+                closeOnClick
+                rtl={false}
+                pauseOnFocusLoss
+                draggable
+                pauseOnHover
+                theme="light"
+              />
+            </div>
+          </BrowserRouter>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </Provider>
+  );
+};
+
+export default App;
             
             <Route 
               path="/teacher/*" 

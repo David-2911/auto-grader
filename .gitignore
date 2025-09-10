@@ -3,15 +3,20 @@ node_modules/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
-package-lock.json
-yarn.lock
 
 # Environment variables
+# Ignore real env files everywhere, but keep example files tracked
 .env
 .env.local
+.env.development
+.env.test
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
+!.env.example
+!/backend/.env.example
+!/frontend/.env.example
 
 # Build outputs
 /dist

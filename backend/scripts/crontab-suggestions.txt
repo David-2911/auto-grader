@@ -1,0 +1,14 @@
+# Suggested crontab entries for Teacher Portal maintenance
+# Run 'crontab -e' and add these lines:
+
+# Daily cleanup at 2 AM
+0 2 * * * cd /path/to/your/backend && ./scripts/cleanup-teacher-portal.sh >> logs/cleanup.log 2>&1
+
+# Weekly backup on Sundays at 3 AM
+0 3 * * 0 cd /path/to/your/backend && ./scripts/backup-teacher-data.sh >> logs/backup.log 2>&1
+
+# Hourly health check
+0 * * * * cd /path/to/your/backend && ./scripts/monitor-teacher-portal.sh >> logs/monitor.log 2>&1
+
+# Daily grade statistics update at 4 AM
+0 4 * * * cd /path/to/your/backend && mysql -u$DB_USER -p$DB_PASS $DB_NAME < scripts/update-statistics.sql >> logs/stats.log 2>&1

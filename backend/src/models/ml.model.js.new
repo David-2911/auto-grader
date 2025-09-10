@@ -1,0 +1,744 @@
+const { pool } = require('../config/database');
+const { logger } = require('../utils/logger');
+const path = require('path');
+const fs = require('fs');
+
+/**
+ * MLModel class for managing machine learning models in the database
+ */
+class MLModel {
+  /**
+   * Create a new ML model
+   * @param {Object} modelData - Model data
+   * @returns {Promise<Object>} - Created model data
+   */
+  static async create(modelData) {
+    try {
+      const { 
+        name, 
+        description, 
+        version, 
+        modelPath, 
+        modelType,
+        featureSet,
+        trainingAccuracy,
+        validationAccuracy, 
+        accuracyMetrics,
+        hyperparameters 
+      } = modelData;
+      
+      const [result] = await pool.query(
+        `INSERT INTO ml_models 
+         (name, description, version, model_path, model_type, feature_set, 
+          training_accuracy, validation_accuracy, accuracy_metrics, hyperparameters, is_active) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, description, version, modelPath, modelType, 
+         featureSet, trainingAccuracy, validationAccuracy, 
+         JSON.stringify(accuracyMetrics), JSON.stringify(hyperparameters), true]
+      );
+      
+      return {
+        id: result.insertId,
+        name,
+        description,
+        version,
+        modelPath,
+        modelType,
+        featureSet,
+        trainingAccuracy,
+        validationAccuracy,
+        accuracyMetrics,
+        hyperparameters,
+        isActive: true,
+        createdAt: new Date()
+      };
+    } catch (error) {
+      logger.error('Error creating ML model:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Find a model by ID
+   * @param {number} id - Model ID
+   * @returns {Promise<Object|null>} - Model data or null
+   */
+  static async findById(id) {
+    try {
+      const [rows] = await pool.query(
+        'SELECT * FROM ml_models WHERE id = ?',
+        [id]
+      );
+      
+      if (!rows.length) return null;
+      
+      // Get usage statistics
+      const [usageStats] = await pool.query(
+        `SELECT 
+          COUNT(*) AS total_usage,
+          AVG(processing_time_ms) AS avg_processing_time,
+          AVG(result_confidence) AS avg_confidence,
+          COUNT(CASE WHEN status = 'success' THEN 1 END) AS success_count,
+          COUNT(CASE WHEN status = 'error' THEN 1 END) AS error_count,
+          COUNT(CASE WHEN feedback_quality_rating IS NOT NULL THEN 1 END) AS rated_count,
+          AVG(feedback_quality_rating) AS avg_feedback_rating
+         FROM model_usage
+         WHERE model_id = ?`,
+        [id]
+      );
+      
+      // Parse JSON fields
+      const model = {
+        ...rows[0],
+        accuracyMetrics: rows[0].accuracy_metrics ? JSON.parse(rows[0].accuracy_metrics) : {},
+        hyperparameters: rows[0].hyperparameters ? JSON.parse(rows[0].hyperparameters) : {},
+        usageStats: usageStats[0]
+      };
+      
+      return model;
+    } catch (error) {
+      logger.error('Error finding ML model by ID:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get all ML models
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} - Array of models
+   */
+  static async getAll({ modelType, isActive, featureSet } = {}) {
+    try {
+      let query = 'SELECT * FROM ml_models';
+      const queryParams = [];
+      const whereConditions = [];
+      
+      if (modelType) {
+        whereConditions.push('model_type = ?');
+        queryParams.push(modelType);
+      }
+      
+      if (isActive !== undefined) {
+        whereConditions.push('is_active = ?');
+        queryParams.push(isActive);
+      }
+      
+      if (featureSet) {
+        whereConditions.push('feature_set = ?');
+        queryParams.push(featureSet);
+      }
+      
+      if (whereConditions.length) {
+        query += ' WHERE ' + whereConditions.join(' AND ');
+      }
+      
+      query += ' ORDER BY created_at DESC, name, version';
+      
+      const [rows] = await pool.query(query, queryParams);
+      
+      // Parse JSON fields for each model
+      const models = rows.map(row => ({
+        ...row,
+        accuracyMetrics: row.accuracy_metrics ? JSON.parse(row.accuracy_metrics) : {},
+        hyperparameters: row.hyperparameters ? JSON.parse(row.hyperparameters) : {}
+      }));
+      
+      return models;
+    } catch (error) {
+      logger.error('Error getting all ML models:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get active model by type
+   * @param {string} modelType - Type of model
+   * @param {string} featureSet - Optional feature set for more specific selection
+   * @returns {Promise<Object|null>} - Active model of specified type or null
+   */
+  static async getActiveByType(modelType, featureSet = null) {
+    try {
+      let query = 'SELECT * FROM ml_models WHERE model_type = ? AND is_active = true';
+      const queryParams = [modelType];
+      
+      if (featureSet) {
+        query += ' AND feature_set = ?';
+        queryParams.push(featureSet);
+      }
+      
+      query += ' ORDER BY created_at DESC LIMIT 1';
+      
+      const [rows] = await pool.query(query, queryParams);
+      
+      if (!rows.length) return null;
+      
+      // Parse JSON fields
+      const model = {
+        ...rows[0],
+        accuracyMetrics: rows[0].accuracy_metrics ? JSON.parse(rows[0].accuracy_metrics) : {},
+        hyperparameters: rows[0].hyperparameters ? JSON.parse(rows[0].hyperparameters) : {}
+      };
+      
+      return model;
+    } catch (error) {
+      logger.error('Error getting active model by type:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update a model
+   * @param {number} id - Model ID
+   * @param {Object} modelData - Updated model data
+   * @returns {Promise<boolean>} - Success status
+   */
+  static async update(id, modelData) {
+    try {
+      const { 
+        name, 
+        description, 
+        version, 
+        modelPath, 
+        trainingAccuracy,
+        validationAccuracy,
+        accuracyMetrics, 
+        hyperparameters,
+        isActive 
+      } = modelData;
+      
+      const [result] = await pool.query(
+        `UPDATE ml_models 
+         SET name = ?, 
+             description = ?, 
+             version = ?, 
+             model_path = ?,
+             training_accuracy = ?,
+             validation_accuracy = ?,
+             accuracy_metrics = ?,
+             hyperparameters = ?,
+             is_active = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [
+          name, 
+          description, 
+          version, 
+          modelPath, 
+          trainingAccuracy,
+          validationAccuracy,
+          JSON.stringify(accuracyMetrics),
+          JSON.stringify(hyperparameters),
+          isActive, 
+          id
+        ]
+      );
+      
+      return result.affectedRows > 0;
+    } catch (error) {
+      logger.error('Error updating ML model:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update model status (active/inactive)
+   * @param {number} id - Model ID
+   * @param {boolean} isActive - Active status
+   * @returns {Promise<boolean>} - Success status
+   */
+  static async updateStatus(id, isActive) {
+    try {
+      const [result] = await pool.query(
+        'UPDATE ml_models SET is_active = ?, updated_at = NOW() WHERE id = ?',
+        [isActive, id]
+      );
+      
+      return result.affectedRows > 0;
+    } catch (error) {
+      logger.error('Error updating ML model status:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get model usage history
+   * @param {number} id - Model ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} - Usage history
+   */
+  static async getUsageHistory(id, { limit = 100, page = 1, sortBy = 'used_at', sortDir = 'DESC' } = {}) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT mu.*, s.assignment_id, a.title AS assignment_title
+         FROM model_usage mu
+         JOIN submissions s ON mu.submission_id = s.id
+         JOIN assignments a ON s.assignment_id = a.id
+         WHERE mu.model_id = ?
+         ORDER BY mu.${sortBy} ${sortDir}
+         LIMIT ? OFFSET ?`,
+        [id, Number(limit), (Number(page) - 1) * Number(limit)]
+      );
+      
+      return rows;
+    } catch (error) {
+      logger.error('Error getting model usage history:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Record model usage
+   * @param {Object} usageData - Usage data
+   * @returns {Promise<Object>} - Created usage record
+   */
+  static async recordUsage(usageData) {
+    try {
+      const { 
+        modelId, 
+        submissionId, 
+        processingTimeMs, 
+        resultConfidence, 
+        predictionScore,
+        status,
+        errorMessage = null 
+      } = usageData;
+      
+      const [result] = await pool.query(
+        `INSERT INTO model_usage 
+         (model_id, submission_id, processing_time_ms, result_confidence, prediction_score, status, error_message) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [modelId, submissionId, processingTimeMs, resultConfidence, predictionScore, status, errorMessage]
+      );
+      
+      return {
+        id: result.insertId,
+        modelId,
+        submissionId,
+        processingTimeMs,
+        resultConfidence,
+        predictionScore,
+        status,
+        errorMessage,
+        usedAt: new Date()
+      };
+    } catch (error) {
+      logger.error('Error recording model usage:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update feedback quality rating for a model usage record
+   * @param {number} usageId - Usage ID
+   * @param {number} rating - Quality rating (1-5)
+   * @returns {Promise<boolean>} - Success status
+   */
+  static async updateFeedbackRating(usageId, rating) {
+    try {
+      const [result] = await pool.query(
+        'UPDATE model_usage SET feedback_quality_rating = ? WHERE id = ?',
+        [rating, usageId]
+      );
+      
+      return result.affectedRows > 0;
+    } catch (error) {
+      logger.error('Error updating feedback quality rating:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Record performance metric
+   * @param {Object} metricData - Performance metric data
+   * @returns {Promise<Object>} - Created metric
+   */
+  static async recordPerformanceMetric(metricData) {
+    try {
+      const { 
+        modelId = null,
+        metricType, 
+        metricName, 
+        metricValue, 
+        additionalData = {} 
+      } = metricData;
+      
+      const [result] = await pool.query(
+        `INSERT INTO performance_metrics 
+         (model_id, metric_type, metric_name, metric_value, additional_data) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [modelId, metricType, metricName, metricValue, JSON.stringify(additionalData)]
+      );
+      
+      return {
+        id: result.insertId,
+        modelId,
+        metricType,
+        metricName,
+        metricValue,
+        additionalData,
+        recordedAt: new Date()
+      };
+    } catch (error) {
+      logger.error('Error recording performance metric:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get performance metrics
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} - Performance metrics
+   */
+  static async getPerformanceMetrics({ modelId, metricType, metricName, startDate, endDate, limit = 100 } = {}) {
+    try {
+      let query = 'SELECT * FROM performance_metrics';
+      const queryParams = [];
+      const whereConditions = [];
+      
+      if (modelId) {
+        whereConditions.push('model_id = ?');
+        queryParams.push(modelId);
+      }
+      
+      if (metricType) {
+        whereConditions.push('metric_type = ?');
+        queryParams.push(metricType);
+      }
+      
+      if (metricName) {
+        whereConditions.push('metric_name = ?');
+        queryParams.push(metricName);
+      }
+      
+      if (startDate) {
+        whereConditions.push('recorded_at >= ?');
+        queryParams.push(startDate);
+      }
+      
+      if (endDate) {
+        whereConditions.push('recorded_at <= ?');
+        queryParams.push(endDate);
+      }
+      
+      if (whereConditions.length) {
+        query += ' WHERE ' + whereConditions.join(' AND ');
+      }
+      
+      query += ' ORDER BY recorded_at DESC LIMIT ?';
+      queryParams.push(Number(limit));
+      
+      const [rows] = await pool.query(query, queryParams);
+      
+      // Parse JSON fields
+      const metrics = rows.map(row => ({
+        ...row,
+        additionalData: row.additional_data ? JSON.parse(row.additional_data) : {}
+      }));
+      
+      return metrics;
+    } catch (error) {
+      logger.error('Error getting performance metrics:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Run A/B test comparison between two models
+   * @param {number} modelAId - First model ID
+   * @param {number} modelBId - Second model ID
+   * @param {number} testSize - Number of samples to test (default: 100)
+   * @returns {Promise<Object>} - Test results
+   */
+  static async runABTest(modelAId, modelBId, testSize = 100) {
+    try {
+      // Get basic info about both models
+      const [modelA, modelB] = await Promise.all([
+        this.findById(modelAId),
+        this.findById(modelBId)
+      ]);
+      
+      if (!modelA || !modelB) {
+        throw new Error('One or both models not found');
+      }
+      
+      // Get recent usage data for comparison
+      const [modelAUsage] = await pool.query(
+        `SELECT AVG(result_confidence) as avg_confidence, AVG(processing_time_ms) as avg_time,
+          AVG(feedback_quality_rating) as avg_rating
+         FROM model_usage 
+         WHERE model_id = ? AND status = 'success' 
+         ORDER BY used_at DESC LIMIT ?`,
+        [modelAId, testSize]
+      );
+      
+      const [modelBUsage] = await pool.query(
+        `SELECT AVG(result_confidence) as avg_confidence, AVG(processing_time_ms) as avg_time,
+          AVG(feedback_quality_rating) as avg_rating
+         FROM model_usage 
+         WHERE model_id = ? AND status = 'success' 
+         ORDER BY used_at DESC LIMIT ?`,
+        [modelBId, testSize]
+      );
+      
+      // Record the test as a performance metric for both models
+      const testId = Date.now().toString();
+      
+      const testResult = {
+        testId,
+        modelA: {
+          id: modelAId,
+          name: modelA.name,
+          version: modelA.version,
+          avgConfidence: modelAUsage[0].avg_confidence || 0,
+          avgProcessingTime: modelAUsage[0].avg_time || 0,
+          avgFeedbackRating: modelAUsage[0].avg_rating || 0,
+          accuracyMetrics: modelA.accuracyMetrics
+        },
+        modelB: {
+          id: modelBId,
+          name: modelB.name,
+          version: modelB.version,
+          avgConfidence: modelBUsage[0].avg_confidence || 0,
+          avgProcessingTime: modelBUsage[0].avg_time || 0,
+          avgFeedbackRating: modelBUsage[0].avg_rating || 0,
+          accuracyMetrics: modelB.accuracyMetrics
+        },
+        testSize,
+        testDate: new Date()
+      };
+      
+      // Record this test in the performance metrics table for both models
+      await Promise.all([
+        this.recordPerformanceMetric({
+          modelId: modelAId,
+          metricType: 'ab_test',
+          metricName: 'model_comparison',
+          metricValue: JSON.stringify({ testId, comparedWith: modelBId }),
+          additionalData: testResult
+        }),
+        this.recordPerformanceMetric({
+          modelId: modelBId,
+          metricType: 'ab_test',
+          metricName: 'model_comparison',
+          metricValue: JSON.stringify({ testId, comparedWith: modelAId }),
+          additionalData: testResult
+        })
+      ]);
+      
+      return testResult;
+    } catch (error) {
+      logger.error('Error running A/B test:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Get processing jobs for a user
+   * @param {number} userId - User ID
+   * @returns {Promise<Array>} - Array of processing jobs
+   */
+  static async getProcessingJobs(userId) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT * FROM processed_files 
+         WHERE user_id = ? 
+         ORDER BY processed_at DESC`,
+        [userId]
+      );
+      
+      return rows;
+    } catch (error) {
+      logger.error('Error getting processing jobs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get processed text for a file
+   * @param {string} filePath - Path to the file
+   * @returns {Promise<string|null>} - Extracted text or null
+   */
+  static async getProcessedText(filePath) {
+    try {
+      const [rows] = await pool.query(
+        'SELECT extracted_text FROM processed_files WHERE file_path = ? ORDER BY processed_at DESC LIMIT 1',
+        [filePath]
+      );
+      
+      if (!rows.length) return null;
+      
+      return rows[0].extracted_text;
+    } catch (error) {
+      logger.error('Error getting processed text:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a processing job
+   * @param {Object} data - Job data
+   * @param {string} data.filePath - Path to the file
+   * @param {number} data.userId - User ID
+   * @returns {Promise<Object>} - Created job
+   */
+  static async createProcessingJob(data) {
+    try {
+      const { filePath, userId } = data;
+      
+      // Insert into processed_files table
+      const [result] = await pool.query(
+        `INSERT INTO processed_files 
+         (file_path, user_id, processed_at, status) 
+         VALUES (?, ?, NOW(), ?)`,
+        [filePath, userId, 'processing']
+      );
+      
+      return {
+        id: result.insertId,
+        filePath,
+        userId,
+        status: 'processing'
+      };
+    } catch (error) {
+      logger.error('Error creating processing job:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a processing job
+   * @param {number} jobId - Job ID
+   * @param {Object} data - Job data
+   * @param {string} data.status - Job status
+   * @param {string} data.extractedText - Extracted text
+   * @returns {Promise<Object>} - Updated job
+   */
+  static async updateProcessingJob(jobId, data) {
+    try {
+      const { status, extractedText } = data;
+      
+      // Update processed_files table
+      await pool.query(
+        `UPDATE processed_files 
+         SET status = ?, extracted_text = ?, completed_at = NOW()
+         WHERE id = ?`,
+        [status, extractedText, jobId]
+      );
+      
+      return {
+        id: jobId,
+        status,
+        completedAt: new Date()
+      };
+    } catch (error) {
+      logger.error('Error updating processing job:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = MLModel;
+
+/**
+ * Get processing jobs for a user
+ * @param {number} userId - User ID
+ * @returns {Promise<Array>} - Array of processing jobs
+ */
+static async getProcessingJobs(userId) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT * FROM processed_files 
+       WHERE user_id = ? 
+       ORDER BY processed_at DESC`,
+      [userId]
+    );
+    
+    return rows;
+  } catch (error) {
+    logger.error('Error getting processing jobs:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get processed text for a file
+ * @param {string} filePath - Path to the file
+ * @returns {Promise<string|null>} - Extracted text or null
+ */
+static async getProcessedText(filePath) {
+  try {
+    const [rows] = await pool.query(
+      'SELECT extracted_text FROM processed_files WHERE file_path = ? ORDER BY processed_at DESC LIMIT 1',
+      [filePath]
+    );
+    
+    if (!rows.length) return null;
+    
+    return rows[0].extracted_text;
+  } catch (error) {
+    logger.error('Error getting processed text:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a processing job
+ * @param {Object} data - Job data
+ * @param {string} data.filePath - Path to the file
+ * @param {number} data.userId - User ID
+ * @returns {Promise<Object>} - Created job
+ */
+static async createProcessingJob(data) {
+  try {
+    const { filePath, userId } = data;
+    
+    // Insert into processed_files table
+    const [result] = await pool.query(
+      `INSERT INTO processed_files 
+       (file_path, user_id, processed_at, status) 
+       VALUES (?, ?, NOW(), ?)`,
+      [filePath, userId, 'processing']
+    );
+    
+    return {
+      id: result.insertId,
+      filePath,
+      userId,
+      status: 'processing'
+    };
+  } catch (error) {
+    logger.error('Error creating processing job:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update a processing job
+ * @param {number} jobId - Job ID
+ * @param {Object} data - Job data
+ * @param {string} data.status - Job status
+ * @param {string} data.extractedText - Extracted text
+ * @returns {Promise<Object>} - Updated job
+ */
+static async updateProcessingJob(jobId, data) {
+  try {
+    const { status, extractedText } = data;
+    
+    // Update processed_files table
+    await pool.query(
+      `UPDATE processed_files 
+       SET status = ?, extracted_text = ?, completed_at = NOW()
+       WHERE id = ?`,
+      [status, extractedText, jobId]
+    );
+    
+    return {
+      id: jobId,
+      status,
+      completedAt: new Date()
+    };
+  } catch (error) {
+    logger.error('Error updating processing job:', error);
+    throw error;
+  }
+}

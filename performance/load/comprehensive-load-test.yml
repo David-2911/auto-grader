@@ -1,0 +1,187 @@
+config:
+  target: 'http://localhost:5000'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 300
+      arrivalRate: 10
+      name: "Baseline load"
+    - duration: 120
+      arrivalRate: 20
+      name: "Spike test"
+    - duration: 180
+      arrivalRate: 15
+      name: "Recovery"
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+  environments:
+    production:
+      target: 'https://autograder.example.com'
+    staging:
+      target: 'https://staging.autograder.example.com'
+
+scenarios:
+  - name: "Authentication Flow"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ $randomEmail() }}"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/api/auth/user"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+      - think: 5
+      - post:
+          url: "/api/auth/logout"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+
+  - name: "Assignment Management"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+      - think: 1
+      - get:
+          url: "/api/assignments"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+          capture:
+            - json: "$.data[0].id"
+              as: "assignmentId"
+      - think: 2
+      - get:
+          url: "/api/assignments/{{ assignmentId }}"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+      - think: 3
+      - get:
+          url: "/api/assignments/{{ assignmentId }}/submissions"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+
+  - name: "File Processing Simulation"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "student@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+      - think: 2
+      - get:
+          url: "/api/assignments"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          capture:
+            - json: "$.data[0].id"
+              as: "assignmentId"
+      - think: 1
+      # Simulate file upload (without actual file for load testing)
+      - post:
+          url: "/api/assignments/{{ assignmentId }}/submissions"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          json:
+            submissionText: "This is a test submission for load testing purposes."
+          expect:
+            - statusCode: 201
+
+  - name: "Dashboard and Analytics"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "teacher@test.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.data.accessToken"
+              as: "accessToken"
+      - think: 1
+      - get:
+          url: "/api/performance/dashboard"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/api/performance/status"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          expect:
+            - statusCode: 200
+      - think: 3
+      - get:
+          url: "/api/analytics/summary"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+
+  - name: "API Health Checks"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+            - hasHeader: "content-type"
+      - think: 1
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+
+# Performance thresholds
+expect:
+  thresholds:
+    - http.response_time:
+        p95: 2000  # 95% of requests should complete within 2s
+        p99: 5000  # 99% of requests should complete within 5s
+    - http.request_rate: 50  # Should handle at least 50 requests/second
+    - http.errors: 0.01  # Error rate should be less than 1%
+
+# Monitoring and reporting
+plugins:
+  expect: {}
+  metrics-by-endpoint: {}
+  
+# Custom metrics
+metrics:
+  custom:
+    auth_success_rate:
+      type: rate
+    file_processing_rate:
+      type: rate
+    cache_hit_rate:
+      type: rate

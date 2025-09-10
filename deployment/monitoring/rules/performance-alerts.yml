@@ -1,0 +1,305 @@
+groups:
+  - name: autograder.performance.alerts
+    rules:
+      # High Response Time Alert
+      - alert: HighResponseTime
+        expr: autograder:response_time_p95_5m > 2.0
+        for: 2m
+        labels:
+          severity: warning
+          service: autograder
+          component: backend
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s, which is above the 2s threshold"
+          runbook_url: "https://docs.autograder.com/runbooks/high-response-time"
+
+      # Critical Response Time Alert
+      - alert: CriticalResponseTime
+        expr: autograder:response_time_p95_5m > 5.0
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: backend
+        annotations:
+          summary: "Critical response time detected"
+          description: "95th percentile response time is {{ $value }}s, which is critically high"
+          runbook_url: "https://docs.autograder.com/runbooks/critical-response-time"
+
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: autograder:error_rate_5m > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          service: autograder
+          component: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }}, which is above the 5% threshold"
+          runbook_url: "https://docs.autograder.com/runbooks/high-error-rate"
+
+      # Critical Error Rate Alert
+      - alert: CriticalErrorRate
+        expr: autograder:error_rate_5m > 0.15
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: backend
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }}, which is critically high"
+          runbook_url: "https://docs.autograder.com/runbooks/critical-error-rate"
+
+      # Low Cache Hit Rate
+      - alert: LowCacheHitRate
+        expr: autograder:cache_hit_rate_5m < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          service: autograder
+          component: cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}, which is below the 70% threshold"
+          runbook_url: "https://docs.autograder.com/runbooks/low-cache-hit-rate"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: autograder:memory_usage_ratio > 0.85
+        for: 3m
+        labels:
+          severity: warning
+          service: autograder
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}, which is above 85%"
+          runbook_url: "https://docs.autograder.com/runbooks/high-memory-usage"
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: autograder:memory_usage_ratio > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: system
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}, which is critically high"
+          runbook_url: "https://docs.autograder.com/runbooks/critical-memory-usage"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: autograder:cpu_usage_5m > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: autograder
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}, which is above 80%"
+          runbook_url: "https://docs.autograder.com/runbooks/high-cpu-usage"
+
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: autograder:disk_usage_ratio > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: autograder
+          component: system
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value | humanizePercentage }}, which is above 85%"
+          runbook_url: "https://docs.autograder.com/runbooks/high-disk-usage"
+
+      # Critical Disk Usage
+      - alert: CriticalDiskUsage
+        expr: autograder:disk_usage_ratio > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: system
+        annotations:
+          summary: "Critical disk usage"
+          description: "Disk usage is {{ $value | humanizePercentage }}, which is critically high"
+          runbook_url: "https://docs.autograder.com/runbooks/critical-disk-usage"
+
+      # Database Slow Queries
+      - alert: HighSlowQueryRate
+        expr: autograder:db_slow_queries_rate_5m > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: autograder
+          component: database
+        annotations:
+          summary: "High slow query rate"
+          description: "Slow query rate is {{ $value }} queries/second, which indicates database performance issues"
+          runbook_url: "https://docs.autograder.com/runbooks/slow-queries"
+
+      # File Processing Queue Backlog
+      - alert: FileProcessingBacklog
+        expr: autograder:file_processing_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: autograder
+          component: file-processing
+        annotations:
+          summary: "File processing queue backlog"
+          description: "File processing queue has {{ $value }} items, indicating a backlog"
+          runbook_url: "https://docs.autograder.com/runbooks/file-processing-backlog"
+
+      # Critical File Processing Backlog
+      - alert: CriticalFileProcessingBacklog
+        expr: autograder:file_processing_queue_size > 500
+        for: 2m
+        labels:
+          severity: critical
+          service: autograder
+          component: file-processing
+        annotations:
+          summary: "Critical file processing queue backlog"
+          description: "File processing queue has {{ $value }} items, which is critically high"
+          runbook_url: "https://docs.autograder.com/runbooks/critical-file-processing-backlog"
+
+      # ML Service High Latency
+      - alert: MLServiceHighLatency
+        expr: autograder:ml_prediction_latency_p95_5m > 10.0
+        for: 3m
+        labels:
+          severity: warning
+          service: autograder
+          component: ml-service
+        annotations:
+          summary: "ML service high latency"
+          description: "ML prediction latency is {{ $value }}s, which is above 10s threshold"
+          runbook_url: "https://docs.autograder.com/runbooks/ml-high-latency"
+
+      # Low Request Rate (Possible Service Down)
+      - alert: LowRequestRate
+        expr: autograder:request_rate_5m < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: autograder
+          component: backend
+        annotations:
+          summary: "Low request rate detected"
+          description: "Request rate is {{ $value }} requests/second, which may indicate service issues"
+          runbook_url: "https://docs.autograder.com/runbooks/low-request-rate"
+
+  - name: autograder.availability.alerts
+    rules:
+      # Service Down Alert
+      - alert: ServiceDown
+        expr: up{job="autograder-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: backend
+        annotations:
+          summary: "Backend service is down"
+          description: "Auto-grader backend service is not responding"
+          runbook_url: "https://docs.autograder.com/runbooks/service-down"
+
+      # Database Down Alert
+      - alert: DatabaseDown
+        expr: up{job="mysql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: database
+        annotations:
+          summary: "Database is down"
+          description: "MySQL database is not responding"
+          runbook_url: "https://docs.autograder.com/runbooks/database-down"
+
+      # Cache Down Alert
+      - alert: CacheDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: cache
+        annotations:
+          summary: "Cache service is down"
+          description: "Redis cache service is not responding"
+          runbook_url: "https://docs.autograder.com/runbooks/cache-down"
+
+      # ML Service Down Alert
+      - alert: MLServiceDown
+        expr: up{job="ml-service"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: autograder
+          component: ml-service
+        annotations:
+          summary: "ML service is down"
+          description: "Machine learning service is not responding"
+          runbook_url: "https://docs.autograder.com/runbooks/ml-service-down"
+
+      # File Processor Down Alert
+      - alert: FileProcessorDown
+        expr: up{job="file-processor"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: autograder
+          component: file-processing
+        annotations:
+          summary: "File processor is down"
+          description: "File processing service is not responding"
+          runbook_url: "https://docs.autograder.com/runbooks/file-processor-down"
+
+  - name: autograder.capacity.alerts
+    rules:
+      # High Connection Count
+      - alert: HighDatabaseConnections
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
+        for: 3m
+        labels:
+          severity: warning
+          service: autograder
+          component: database
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connection usage is {{ $value | humanizePercentage }}, approaching limits"
+          runbook_url: "https://docs.autograder.com/runbooks/high-db-connections"
+
+      # High Redis Memory Usage
+      - alert: HighRedisMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 3m
+        labels:
+          severity: warning
+          service: autograder
+          component: cache
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}, approaching limits"
+          runbook_url: "https://docs.autograder.com/runbooks/high-redis-memory"
+
+      # File System Full
+      - alert: FileSystemFull
+        expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes > 0.9
+        for: 1m
+        labels:
+          severity: critical
+          service: autograder
+          component: system
+        annotations:
+          summary: "File system almost full"
+          description: "File system usage is {{ $value | humanizePercentage }}, critically high"
+          runbook_url: "https://docs.autograder.com/runbooks/filesystem-full"

@@ -1,0 +1,71 @@
+config:
+  target: 'http://localhost:5000'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm-up"
+    
+    - duration: 180
+      arrivalRate: 10
+      rampTo: 30
+      name: "Ramp-up"
+    
+    - duration: 300
+      arrivalRate: 30
+      name: "Sustained load"
+    
+    - duration: 120
+      arrivalRate: 30
+      rampTo: 5
+      name: "Cool-down"
+
+  processor: "./processors/submission-processor.js"
+  
+  ensure:
+    - http.response_time.p95: 5000   # File operations can take longer
+    - http.response_time.p99: 10000
+    - http.codes.200: 0.90
+    - http.codes.500: 0.01
+
+scenarios:
+  - name: "Assignment Submission Load Test"
+    weight: 100
+    flow:
+      # Student login
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "student{{ $randomNumber() }}@test.com"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      # Get available assignments
+      - get:
+          url: "/api/assignments/available"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "assignmentId"
+      
+      - think: 5
+      
+      # Submit assignment
+      - post:
+          url: "/api/assignments/{{ assignmentId }}/submit"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+            Content-Type: "multipart/form-data"
+          form:
+            submissionText: "This is a test submission for load testing"
+            submissionFile: "@test-files/sample-submission.pdf"
+      
+      - think: 2
+      
+      # Check submission status
+      - get:
+          url: "/api/assignments/{{ assignmentId }}/submission"
+          headers:
+            Authorization: "Bearer {{ authToken }}"

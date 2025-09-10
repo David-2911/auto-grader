@@ -1,0 +1,75 @@
+
+# Teacher Portal specific
+storage/temp_uploads/
+storage/gradebook_exports/
+storage/processed_files/
+logs/*.log
+coverage/
+*.log
+
+# Dependencies
+node_modules/
+
+# Environment files
+# Ignore real env files; keep example tracked
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# Test files
+tests/temp/
+tests/fixtures/uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup files
+backups/
+*.sql.gz
+
+
+# Teacher Portal specific
+storage/temp_uploads/
+storage/gradebook_exports/
+storage/processed_files/
+logs/*.log
+coverage/
+*.log
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.test
+.env.production
+
+# Test files
+tests/temp/
+tests/fixtures/uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup files
+backups/
+*.sql.gz
+

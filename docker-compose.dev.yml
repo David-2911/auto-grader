@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # Development MySQL with test data
+  mysql:
+    image: mysql:8.0
+    container_name: autograder-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: devpass123
+      MYSQL_DATABASE: auto_grade_dev
+      MYSQL_USER: devuser
+      MYSQL_PASSWORD: devpass
+    ports:
+      - "3307:3306"  # Different port to avoid conflicts
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./backend/src/config/comprehensive_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./deployment/mysql/dev-seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    networks:
+      - autograder-dev
+
+  # Development Redis
+  redis:
+    image: redis:7-alpine
+    container_name: autograder-redis-dev
+    restart: unless-stopped
+    command: redis-server --requirepass devredis123
+    ports:
+      - "6380:6379"  # Different port
+    networks:
+      - autograder-dev
+
+  # Development Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      target: builder  # Use development stage
+    container_name: autograder-backend-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DB_HOST: mysql
+      DB_USER: devuser
+      DB_PASSWORD: devpass
+      DB_NAME: auto_grade_dev
+      REDIS_HOST: redis
+      REDIS_PASSWORD: devredis123
+      JWT_SECRET: dev-jwt-secret-key
+      CORS_ORIGIN: http://localhost:3000
+      LOG_LEVEL: debug
+    ports:
+      - "5001:5000"  # Different port
+    volumes:
+      - ./backend:/app
+      - backend_dev_storage:/app/storage
+      - /app/node_modules  # Prevent overwriting node_modules
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - autograder-dev
+    command: npm run dev
+
+  # Development Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: builder
+    container_name: autograder-frontend-dev
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:5001/api
+      VITE_NODE_ENV: development
+    ports:
+      - "3001:3000"  # Different port
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - autograder-dev
+    command: npm run dev
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog
+    container_name: autograder-mailhog-dev
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - autograder-dev
+
+volumes:
+  mysql_dev_data:
+    driver: local
+  backend_dev_storage:
+    driver: local
+
+networks:
+  autograder-dev:
+    driver: bridge
