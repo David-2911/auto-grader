@@ -1,7 +1,7 @@
 services:
   - type: web
     name: autograder-backend
-    env: docker
+    runtime: docker
     dockerfilePath: Dockerfile.backend
     plan: starter
     autoDeploy: true
@@ -21,7 +21,7 @@ services:
       - key: REDIS_URL
         fromService:
           name: autograder-redis
-          type: redis
+          type: keyvalue
           property: connectionString
       - key: JWT_SECRET
         sync: false
@@ -37,21 +37,21 @@ services:
       mountPath: /app/storage
       sizeGB: 5
 
-  - type: static_site
+  - type: web
     name: autograder-frontend
-    buildCommand: npm ci && npm run build
-    publishPath: dist
+    runtime: static
     rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        fromService:
-          name: autograder-backend
-          type: web
-          property: url
+        sync: false
 
   - type: pserv
     name: autograder-mysql
-    image: mysql:8.0
+    runtime: image
+    image:
+      url: docker.io/library/mysql:8.0
     envVars:
       - key: MYSQL_DATABASE
         value: auto_grade
@@ -66,14 +66,14 @@ services:
       mountPath: /var/lib/mysql
       sizeGB: 10
 
-  - type: redis
+  - type: keyvalue
     name: autograder-redis
     ipAllowList: []
     plan: free
 
   - type: worker
     name: autograder-ml
-    env: docker
+    runtime: docker
     dockerfilePath: Dockerfile.ml
     autoDeploy: false
     plan: starter
