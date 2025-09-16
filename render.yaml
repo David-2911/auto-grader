@@ -37,10 +37,10 @@ services:
       mountPath: /app/storage
       sizeGB: 5
 
-  - type: static
+  - type: static_site
     name: autograder-frontend
     buildCommand: npm ci && npm run build
-    publishPath: frontend/dist
+    publishPath: dist
     rootDir: frontend
     envVars:
       - key: VITE_API_URL
