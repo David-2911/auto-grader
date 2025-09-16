@@ -106,6 +106,7 @@ function CustomTabPanel(props: TabPanelProps) {
 
 export const StudentDashboard: React.FC = () => {
   const dispatch = useAppDispatch();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const {
     dashboardData,
     assignments,
@@ -142,6 +143,7 @@ export const StudentDashboard: React.FC = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     // Load initial data
     dispatch(fetchDashboardData());
     dispatch(fetchAssignments());
@@ -151,7 +153,7 @@ export const StudentDashboard: React.FC = () => {
     dispatch(fetchProfile());
     dispatch(fetchNotifications());
     dispatch(fetchCourses());
-  }, [dispatch]);
+  }, [dispatch, isAuthenticated]);
 
   useEffect(() => {
     // Show notification for new unread notifications

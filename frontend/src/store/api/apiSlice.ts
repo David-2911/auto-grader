@@ -1,4 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
+import { tokenRefreshed, logout } from '../slices/authSlice';
+import { getActiveRefreshPromise } from '@/auth/tokenScheduler';
 import { RootState } from '../index';
 import {
   User,
@@ -11,8 +14,8 @@ import {
   PaginatedResponse,
 } from '@/types';
 
-const baseQuery = fetchBaseQuery({
-  baseUrl: '/api',
+const rawBaseQuery = fetchBaseQuery({
+  baseUrl: (import.meta as any).env?.VITE_API_URL || '/api',
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as RootState).auth.token;
     if (token) {
@@ -21,6 +24,39 @@ const baseQuery = fetchBaseQuery({
     return headers;
   },
 });
+
+// Reauth wrapper
+const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extraOptions) => {
+  let result = await rawBaseQuery(args, api, extraOptions);
+  if (result.error && result.error.status === 401) {
+    // If a scheduled refresh is already in-flight, wait for it then retry once
+    const active = getActiveRefreshPromise();
+    if (active) {
+      await active;
+      return await rawBaseQuery(args, api, extraOptions);
+    }
+    const state = api.getState() as RootState;
+    const refreshToken = state.auth.refreshToken;
+    if (refreshToken) {
+      const refreshResult = await rawBaseQuery({
+        url: '/auth/refresh-token',
+        method: 'POST',
+        body: { refreshToken },
+      }, api, extraOptions);
+      if (refreshResult.data && (refreshResult as any).data.accessToken) {
+        const data: any = (refreshResult as any).data;
+        api.dispatch(tokenRefreshed({ token: data.accessToken, refreshToken: data.refreshToken }));
+        // retry original
+        result = await rawBaseQuery(args, api, extraOptions);
+      } else {
+        api.dispatch(logout());
+      }
+    } else {
+      api.dispatch(logout());
+    }
+  }
+  return result;
+};
 
 export const api = createApi({
   reducerPath: 'api',
@@ -35,15 +71,22 @@ export const api = createApi({
         body: credentials,
       }),
     }),
-    register: builder.mutation<ApiResponse<{ user: User; token: string }>, RegisterData>({
-      query: (userData) => ({
-        url: '/auth/register',
+    refreshSession: builder.mutation<ApiResponse<{ accessToken: string; refreshToken: string }>, { refreshToken: string }>({
+      query: ({ refreshToken }) => ({
+        url: '/auth/refresh-token',
         method: 'POST',
-        body: userData,
+        body: { refreshToken },
+      }),
+    }),
+    registerRole: builder.mutation<ApiResponse<{ userId: number }>, { role: 'student' | 'teacher'; data: RegisterData }>({
+      query: ({ role, data }) => ({
+        url: `/auth/register/${role}`,
+        method: 'POST',
+        body: data,
       }),
     }),
     getCurrentUser: builder.query<ApiResponse<User>, void>({
-      query: () => '/auth/me',
+      query: () => '/auth/user',
       providesTags: ['User'],
     }),
     
@@ -57,7 +100,7 @@ export const api = createApi({
     }),
     getUserById: builder.query<ApiResponse<User>, number>({
       query: (id) => `/users/${id}`,
-      providesTags: (result, error, id) => [{ type: 'User', id }],
+      providesTags: (_r, _e, id) => [{ type: 'User', id }],
     }),
     updateUser: builder.mutation<ApiResponse<User>, { id: number; data: Partial<User> }>({
       query: ({ id, data }) => ({
@@ -65,7 +108,7 @@ export const api = createApi({
         method: 'PUT',
         body: data,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'User', id }],
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'User', id }],
     }),
     
     // Course endpoints
@@ -78,7 +121,7 @@ export const api = createApi({
     }),
     getCourseById: builder.query<ApiResponse<Course>, number>({
       query: (id) => `/courses/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Course', id }],
+      providesTags: (_r, _e, id) => [{ type: 'Course', id }],
     }),
     createCourse: builder.mutation<ApiResponse<Course>, Partial<Course>>({
       query: (courseData) => ({
@@ -94,7 +137,7 @@ export const api = createApi({
         method: 'PUT',
         body: data,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Course', id }],
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Course', id }],
     }),
     deleteCourse: builder.mutation<ApiResponse<void>, number>({
       query: (id) => ({
@@ -114,7 +157,7 @@ export const api = createApi({
     }),
     getAssignmentById: builder.query<ApiResponse<Assignment>, number>({
       query: (id) => `/assignments/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Assignment', id }],
+      providesTags: (_r, _e, id) => [{ type: 'Assignment', id }],
     }),
     createAssignment: builder.mutation<ApiResponse<Assignment>, Partial<Assignment>>({
       query: (assignmentData) => ({
@@ -130,7 +173,7 @@ export const api = createApi({
         method: 'PUT',
         body: data,
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Assignment', id }],
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Assignment', id }],
     }),
     deleteAssignment: builder.mutation<ApiResponse<void>, number>({
       query: (id) => ({
@@ -150,7 +193,7 @@ export const api = createApi({
     }),
     getSubmissionById: builder.query<ApiResponse<Submission>, number>({
       query: (id) => `/submissions/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Submission', id }],
+      providesTags: (_r, _e, id) => [{ type: 'Submission', id }],
     }),
     createSubmission: builder.mutation<ApiResponse<Submission>, FormData>({
       query: (formData) => ({
@@ -166,14 +209,14 @@ export const api = createApi({
         method: 'PUT',
         body: { grade, feedback },
       }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Submission', id }],
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Submission', id }],
     }),
   }),
 });
 
 export const {
   useLoginMutation,
-  useRegisterMutation,
+  useRegisterRoleMutation,
   useGetCurrentUserQuery,
   useGetUsersQuery,
   useGetUserByIdQuery,

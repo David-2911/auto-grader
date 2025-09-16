@@ -1,13 +1,7 @@
 module.exports = {
   root: true,
   env: { browser: true, es2020: true },
-  extends: [
-    'eslint:recommended',
-    '@typescript-eslint/recommended',
-    'plugin:react-hooks/recommended',
-    'plugin:react/recommended',
-    'plugin:react/jsx-runtime'
-  ],
+  extends: ['eslint:recommended', '@typescript-eslint/recommended', 'plugin:react-hooks/recommended', 'plugin:react/recommended', 'plugin:react/jsx-runtime', 'plugin:storybook/recommended', 'plugin:storybook/recommended'],
   ignorePatterns: ['dist', '.eslintrc.cjs'],
   parser: '@typescript-eslint/parser',
   plugins: ['react-refresh', '@typescript-eslint'],

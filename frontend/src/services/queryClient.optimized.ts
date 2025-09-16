@@ -1,7 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { persistQueryClient } from '@tanstack/react-query-persist-client-core';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { QueryClient } from '@tanstack/react-query';
 
 // Create persister for offline caching
 const localStoragePersister = createSyncStoragePersister({
@@ -201,21 +198,6 @@ export const queryPerformance = {
   },
 };
 
-// React Query Provider component with devtools
-import React from 'react';
-
-export const QueryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-      {process.env.NODE_ENV === 'development' && (
-        <ReactQueryDevtools 
-          initialIsOpen={false}
-          position="bottom-right"
-        />
-      )}
-    </QueryClientProvider>
-  );
-};
+export { queryClient };
 
 export default queryClient;

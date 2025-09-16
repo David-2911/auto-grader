@@ -34,7 +34,7 @@ import {
   Assignment,
   School,
   Timeline,
-  Target,
+  GpsFixed,
   CheckCircle,
   WorkspacePremium,
   LocalFireDepartment,
@@ -545,7 +545,7 @@ export const ProgressTracking: React.FC<ProgressTrackingProps> = ({
           <Accordion>
             <AccordionSummary expandIcon={<ExpandMore />}>
               <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
-                <Target sx={{ mr: 1 }} />
+                <GpsFixed sx={{ mr: 1 }} />
                 Personal Goals ({goals.filter(g => (g.currentValue / g.targetValue) * 100 >= 100).length}/{goals.length} completed)
               </Typography>
             </AccordionSummary>

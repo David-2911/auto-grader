@@ -1,6 +1,9 @@
 const redis = require('redis');
 const { logger } = require('../utils/logger');
 
+// Load environment variables if not already loaded
+require('dotenv').config();
+
 class CacheManager {
   constructor() {
     this.client = null;
@@ -17,17 +20,27 @@ class CacheManager {
 
   async connect() {
     try {
+      const host = process.env.REDIS_HOST || '127.0.0.1';
+      const port = parseInt(process.env.REDIS_PORT || '6379', 10);
+      const password = process.env.REDIS_PASSWORD || undefined;
+
+      // Prefer REDIS_URL if provided (supports rediss:// for TLS providers like Upstash/Redis Cloud)
+      let url = process.env.REDIS_URL;
+      if (!url) {
+        url = password 
+          ? `redis://:${encodeURIComponent(password)}@${host}:${port}`
+          : `redis://${host}:${port}`;
+      }
+
+      const useTLS = url.startsWith('rediss://') || process.env.REDIS_TLS === 'true';
+
       this.client = redis.createClient({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        db: 0,
-        maxRetriesPerRequest: 3,
-        retryDelayOnFailover: 100,
-        enableReadyCheck: true,
-        maxRetriesPerRequest: null,
-        connectTimeout: 60000,
-        commandTimeout: 5000
+        url,
+        socket: {
+          reconnectStrategy: (retries) => Math.min(1000 * retries, 5000),
+          connectTimeout: 60000,
+          ...(useTLS ? { tls: true } : {})
+        }
       });
 
       this.client.on('connect', () => {

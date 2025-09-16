@@ -234,6 +234,7 @@ const intelligentCompression = () => {
 // Error handling with performance context
 const performanceErrorHandler = (err, req, res, next) => {
   const responseTime = Date.now() - (req.startTime || Date.now());
+  const status = err.statusCode || err.status || 500;
   
   logger.error('Request failed', {
     error: err.message,
@@ -246,9 +247,9 @@ const performanceErrorHandler = (err, req, res, next) => {
   });
   
   // Track error in performance monitoring
-  performanceMonitor.recordAPIRequest(req, { statusCode: 500 }, responseTime);
+  performanceMonitor.recordAPIRequest(req, { statusCode: status }, responseTime);
   
-  res.status(err.status || 500).json({
+  res.status(status).json({
     error: true,
     message: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message,
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })

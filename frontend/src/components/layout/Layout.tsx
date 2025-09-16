@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { Box, CssBaseline, ThemeProvider } from '@mui/material';
+import { Box, ThemeProvider } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAppSelector } from '@/store/hooks';
 import { createAppTheme } from '@/styles/theme';
@@ -44,7 +44,6 @@ export const Layout: React.FC = () => {
 
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
       <Box sx={{ display: 'flex' }}>
         <Header />
         <Sidebar />

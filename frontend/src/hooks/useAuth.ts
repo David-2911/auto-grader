@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { loginStart, loginSuccess, loginFailure, logout } from '@/store/slices/authSlice';
-import { useLoginMutation, useRegisterMutation, useGetCurrentUserQuery } from '@/store/api/apiSlice';
-import { LoginCredentials, RegisterData } from '@/types';
+import { useLoginMutation, useRegisterRoleMutation, useGetCurrentUserQuery } from '@/store/api/apiSlice';
+import { LoginCredentials, RegisterData, UserRole } from '@/types';
 
 export const useAuth = () => {
   const dispatch = useAppDispatch();
@@ -11,7 +11,7 @@ export const useAuth = () => {
   );
 
   const [loginMutation] = useLoginMutation();
-  const [registerMutation] = useRegisterMutation();
+  const [registerRoleMutation] = useRegisterRoleMutation();
   
   // Get current user if token exists
   const { data: currentUserData, isLoading: isLoadingUser } = useGetCurrentUserQuery(
@@ -38,18 +38,16 @@ export const useAuth = () => {
     }
   };
 
-  const register = async (userData: RegisterData) => {
+  const register = async (role: UserRole, userData: RegisterData) => {
     try {
       dispatch(loginStart());
-      const result = await registerMutation(userData).unwrap();
-      
-      if (result.success && result.data) {
-        dispatch(loginSuccess(result.data));
-        return { success: true };
-      } else {
-        dispatch(loginFailure(result.message || 'Registration failed'));
-        return { success: false, error: result.message };
+      const result = await registerRoleMutation({ role, data: userData }).unwrap();
+      if (result.success) {
+        // Unlike login, backend only returns userId for registration. Do not auto-login.
+        return { success: true, userId: (result as any).data?.userId };
       }
+      dispatch(loginFailure(result.message || 'Registration failed'));
+      return { success: false, error: result.message };
     } catch (error: any) {
       const errorMessage = error.data?.message || error.message || 'Registration failed';
       dispatch(loginFailure(errorMessage));

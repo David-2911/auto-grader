@@ -91,21 +91,21 @@ class PerformanceMonitor {
       const cpuUsage = process.cpuUsage();
       
       await executeQuery(`
-        INSERT INTO performance_metrics (metric_name, metric_value, metric_unit, metadata)
+        INSERT INTO performance_metrics (metric_type, metric_name, metric_value, additional_data)
         VALUES 
-        ('memory_usage_mb', ?, 'MB', ?),
-        ('heap_used_mb', ?, 'MB', ?),
-        ('cpu_user_ms', ?, 'ms', ?),
-        ('cpu_system_ms', ?, 'ms', ?)
+        ('system', 'memory_usage_mb', ?, ?),
+        ('system', 'heap_used_mb', ?, ?),
+        ('system', 'cpu_user_ms', ?, ?),
+        ('system', 'cpu_system_ms', ?, ?)
       `, [
         used.rss / 1024 / 1024,
-        JSON.stringify({ type: 'memory', process: 'node' }),
+        JSON.stringify({ type: 'memory', process: 'node', unit: 'MB' }),
         used.heapUsed / 1024 / 1024,
-        JSON.stringify({ type: 'heap', process: 'node' }),
+        JSON.stringify({ type: 'heap', process: 'node', unit: 'MB' }),
         cpuUsage.user / 1000,
-        JSON.stringify({ type: 'cpu_user', process: 'node' }),
+        JSON.stringify({ type: 'cpu_user', process: 'node', unit: 'ms' }),
         cpuUsage.system / 1000,
-        JSON.stringify({ type: 'cpu_system', process: 'node' })
+        JSON.stringify({ type: 'cpu_system', process: 'node', unit: 'ms' })
       ]);
     } catch (error) {
       logger.error('Failed to collect system metrics:', error);
@@ -115,13 +115,20 @@ class PerformanceMonitor {
   // Collect performance metrics
   async collectPerformanceMetrics() {
     try {
-      // Database metrics
-      const [dbStats] = await executeQuery(`
-        SELECT 
-          (SELECT COUNT(*) FROM information_schema.processlist) as active_connections,
-          (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Threads_connected') as total_connections,
-          (SELECT VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME = 'Queries') as total_queries
-      `);
+      // Database metrics (use SHOW GLOBAL STATUS for broader compatibility)
+      let dbStats = [{ active_connections: 0, total_connections: 0, total_queries: 0 }];
+      try {
+        const [threadsRows] = await executeQuery(`SHOW GLOBAL STATUS LIKE 'Threads_connected'`);
+        const [queriesRows] = await executeQuery(`SHOW GLOBAL STATUS LIKE 'Questions'`);
+        const [processCount] = await executeQuery(`SELECT COUNT(*) as count FROM information_schema.processlist`);
+        dbStats = [{
+          active_connections: processCount[0]?.count || 0,
+          total_connections: parseInt(threadsRows?.[0]?.Value || threadsRows?.[0]?.VARIABLE_VALUE || 0, 10),
+          total_queries: parseInt(queriesRows?.[0]?.Value || queriesRows?.[0]?.VARIABLE_VALUE || 0, 10)
+        }];
+      } catch (e) {
+        logger.error('DB status collection failed, using defaults', e);
+      }
 
       // Cache metrics
       const cacheStats = await cacheManager.getStats();
@@ -130,24 +137,24 @@ class PerformanceMonitor {
       const apiMetrics = this.calculateAPIMetrics();
 
       await executeQuery(`
-        INSERT INTO performance_metrics (metric_name, metric_value, metric_unit, metadata)
+        INSERT INTO performance_metrics (metric_type, metric_name, metric_value, additional_data)
         VALUES 
-        ('db_active_connections', ?, 'count', ?),
-        ('db_total_connections', ?, 'count', ?),
-        ('cache_hit_rate', ?, 'percentage', ?),
-        ('api_avg_response_time', ?, 'ms', ?),
-        ('api_error_rate', ?, 'percentage', ?)
+        ('database', 'db_active_connections', ?, ?),
+        ('database', 'db_total_connections', ?, ?),
+        ('system', 'cache_hit_rate', ?, ?),
+        ('api', 'api_avg_response_time', ?, ?),
+        ('api', 'api_error_rate', ?, ?)
       `, [
         dbStats[0]?.active_connections || 0,
-        JSON.stringify({ type: 'database' }),
+        JSON.stringify({ type: 'database', unit: 'count' }),
         dbStats[0]?.total_connections || 0,
-        JSON.stringify({ type: 'database' }),
+        JSON.stringify({ type: 'database', unit: 'count' }),
         parseFloat(cacheStats.hitRate) || 0,
-        JSON.stringify({ type: 'cache', service: 'redis' }),
+        JSON.stringify({ type: 'cache', service: 'redis', unit: 'percentage' }),
         apiMetrics.avgResponseTime,
-        JSON.stringify({ type: 'api', period: '5min' }),
+        JSON.stringify({ type: 'api', period: '5min', unit: 'ms' }),
         apiMetrics.errorRate,
-        JSON.stringify({ type: 'api', period: '5min' })
+        JSON.stringify({ type: 'api', period: '5min', unit: 'percentage' })
       ]);
     } catch (error) {
       logger.error('Failed to collect performance metrics:', error);
@@ -246,11 +253,8 @@ class PerformanceMonitor {
   // Send alert to external systems
   async sendAlert(alertType, details) {
     try {
-      // Example: Log to database for dashboard display
-      await executeQuery(`
-        INSERT INTO performance_alerts (alert_type, alert_details, created_at)
-        VALUES (?, ?, NOW())
-      `, [alertType, JSON.stringify(details)]);
+      // Log alert to console/file logs instead of database until performance_alerts table exists
+      logger.warn(`Performance Alert: ${alertType}`, details);
       
       // Example: Send to monitoring webhook
       if (process.env.MONITORING_WEBHOOK_URL) {
@@ -267,9 +271,10 @@ class PerformanceMonitor {
       // Recent metrics
       const [recentMetrics] = await executeQuery(`
         SELECT 
+          metric_type,
           metric_name,
           metric_value,
-          metric_unit,
+          additional_data,
           recorded_at
         FROM performance_metrics 
         WHERE recorded_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)

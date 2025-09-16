@@ -106,6 +106,57 @@ Auto-grade/
 4. Push your branch and create a pull request
 5. After review, merge the pull request
 
+## Frontend ↔ Backend Connectivity (Updated)
+
+The frontend now uses an environment-driven or proxied base URL for API calls.
+
+Priority resolution order:
+1. `VITE_API_URL` (e.g. `http://localhost:5001/api`)
+2. Fallback relative `/api` path passed through Vite dev proxy.
+
+Vite dev server proxy (see `frontend/vite.config.ts`):
+```
+proxy: {
+	'/api': {
+		target: process.env.VITE_BACKEND_ORIGIN || 'http://localhost:5001',
+		changeOrigin: true,
+		secure: false
+	}
+}
+```
+Ensure backend (dev container) is mapped to port 5001.
+
+### Registration API
+Backend routes require role segment: `/api/auth/register/student` or `/api/auth/register/teacher`.
+
+RTK Query exposes `registerRole` mutation and the `useAuth` hook now expects an explicit role parameter:
+```ts
+// Direct mutation
+const [registerRole] = useRegisterRoleMutation();
+await registerRole({ role: 'student', data: { email, password, identifier, firstName, lastName } });
+
+// Via useAuth (does not auto-login after registration)
+const { register } = useAuth();
+await register('student', { email, password, identifier, firstName, lastName });
+```
+
+### Environment Example
+See `.env.example` at project root:
+```
+VITE_API_URL=http://localhost:5001/api
+VITE_BACKEND_ORIGIN=http://localhost:5001
+```
+
+### Common Connectivity Pitfalls
+- 404 on `/auth/*`: Missing `/api` prefix or proxy not active.
+- CORS error: Add frontend origin(s) to `CORS_ORIGIN` env var.
+- Password validation failures: Must match backend regex (length ≥6, upper, lower, digit, special `!@#$%^&*`).
+
+### Health Check
+Backend: `GET http://localhost:5001/api/health`
+Frontend proxied (once running): `GET http://localhost:3000/api/health`
+
+
 ## Deployment
 
 The application can be deployed using Docker containers for both the frontend and backend components.

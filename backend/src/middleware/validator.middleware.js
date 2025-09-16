@@ -344,8 +344,34 @@ const validate = (schema) => {
   ];
 };
 
+// Middleware to handle validation results
+const validateResult = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const extractedErrors = errors.array().map(err => ({
+      field: err.param,
+      message: err.msg,
+      value: err.value
+    }));
+
+    logger.warn('Validation failed:', extractedErrors);
+    
+    return res.status(400).json({
+      success: false,
+      error: {
+        status: 400,
+        message: 'Validation error',
+        details: extractedErrors
+      }
+    });
+  }
+  
+  next();
+};
+
 module.exports = {
   validate,
+  validateResult,
   validationRules,
   validationSchemas
 };

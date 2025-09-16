@@ -6,6 +6,83 @@ const cacheManager = require('../services/cache.service');
 const fileProcessingService = require('../services/file-processing.optimized.service');
 const { executeQuery, getHealthStats } = require('../config/database.optimized');
 
+// Basic UI-friendly summary for dashboard cards
+router.get('/ui-summary', authenticate, authorize('admin', 'teacher'), async (req, res, next) => {
+  try {
+    const hours = parseInt(req.query.hours || '24', 10);
+
+    // Totals over the time window
+    const [totalsRows] = await executeQuery(`
+      SELECT 
+        COUNT(*) AS request_count,
+        AVG(response_time_ms) AS avg_response_time,
+        SUM(CASE WHEN response_status >= 400 THEN 1 ELSE 0 END) AS error_count,
+        SUM(CASE WHEN response_status >= 200 AND response_status < 400 THEN 1 ELSE 0 END) AS success_count
+      FROM api_usage_tracking
+      WHERE timestamp > DATE_SUB(NOW(), INTERVAL ? HOUR)
+    `, [hours]);
+
+    const totals = totalsRows[0] || { request_count: 0, avg_response_time: 0, error_count: 0, success_count: 0 };
+    const errorRate = totals.request_count > 0 ? (totals.error_count / totals.request_count) * 100 : 0;
+
+    // Top endpoints by volume
+    const [topEndpointsRows] = await executeQuery(`
+      SELECT 
+        endpoint,
+        method,
+        COUNT(*) AS request_count,
+        AVG(response_time_ms) AS avg_response_time,
+        SUM(CASE WHEN response_status >= 400 THEN 1 ELSE 0 END) AS error_count
+      FROM api_usage_tracking
+      WHERE timestamp > DATE_SUB(NOW(), INTERVAL ? HOUR)
+      GROUP BY endpoint, method
+      ORDER BY request_count DESC
+      LIMIT 5
+    `, [hours]);
+
+    const topEndpoints = (topEndpointsRows || []).map(r => ({
+      endpoint: r.endpoint,
+      method: r.method,
+      requestCount: r.request_count,
+      avgResponseTime: r.avg_response_time ? Math.round(r.avg_response_time) : 0,
+      errorRate: r.request_count > 0 ? Number(((r.error_count / r.request_count) * 100).toFixed(2)) : 0
+    }));
+
+    // System + cache stats for quick cards
+    const mem = process.memoryUsage();
+    const memoryUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
+    const memoryTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
+    const memoryPercent = memoryTotalMB > 0 ? Math.round((memoryUsedMB / memoryTotalMB) * 100) : 0;
+    const uptimeSeconds = Math.round(process.uptime());
+    const cacheStats = await cacheManager.getStats();
+    const cacheHitRate = Number(parseFloat(cacheStats.hitRate || 0).toFixed(2));
+
+    res.success({
+      generatedAt: new Date().toISOString(),
+      windowHours: hours,
+      totals: {
+        requests: totals.request_count || 0,
+        successes: totals.success_count || 0,
+        errors: totals.error_count || 0,
+        errorRate: Number(errorRate.toFixed(2)),
+        avgResponseTime: totals.avg_response_time ? Math.round(totals.avg_response_time) : 0
+      },
+      topEndpoints,
+      system: {
+        memoryUsedMB,
+        memoryTotalMB,
+        memoryPercent,
+        uptimeSeconds
+      },
+      cache: {
+        hitRate: cacheHitRate
+      }
+    }, 'UI summary retrieved successfully');
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get performance dashboard data
 router.get('/dashboard', authenticate, authorize('admin', 'teacher'), async (req, res, next) => {
   try {

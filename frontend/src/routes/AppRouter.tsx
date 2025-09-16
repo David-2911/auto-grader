@@ -1,6 +1,9 @@
 import React from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import { Navigate } from 'react-router-dom';
+import LandingPage from '@/pages/LandingPage';
+
+// Test page
+import TestPage from '@/pages/TestPage';
 
 // Layout components
 import Layout from '@/components/layout/Layout';
@@ -10,6 +13,7 @@ import ProtectedRoute from './ProtectedRoute';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
 
 // Dashboard pages
 import StudentDashboard from '@/pages/dashboard/StudentDashboard';
@@ -42,7 +46,7 @@ import NotFoundPage from '@/pages/error/NotFoundPage';
 import UnauthorizedPage from '@/pages/error/UnauthorizedPage';
 
 const router = createBrowserRouter([
-  // Public routes
+  // Authentication routes (public)
   {
     path: '/login',
     element: <LoginPage />,
@@ -55,25 +59,39 @@ const router = createBrowserRouter([
     path: '/forgot-password',
     element: <ForgotPasswordPage />,
   },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />, 
+  },
+  
+  // Test route for debugging
+  {
+    path: '/test',
+    element: <TestPage />,
+  },
+  
+  // Root landing (decides where to go based on auth/role)
+  {
+    path: '/',
+    element: <LandingPage />,
+  },
   
   // Protected routes with layout
   {
-    path: '/',
+    path: '/app',
     element: (
-      <ProtectedRoute>
+      <ProtectedRoute requireAuth>
         <Layout />
       </ProtectedRoute>
     ),
     children: [
       {
-        index: true,
-        element: <Navigate to="/dashboard" replace />,
-      },
-      
-      // Dashboard routes
-      {
         path: 'dashboard',
-        element: <StudentDashboard />, // Default dashboard, will be dynamically determined
+        element: (
+          <ProtectedRoute requireAuth>
+            <StudentDashboard />
+          </ProtectedRoute>
+        ), // Default dashboard, will be dynamically determined
       },
       {
         path: 'student',
@@ -86,7 +104,7 @@ const router = createBrowserRouter([
       {
         path: 'teacher',
         element: (
-          <ProtectedRoute allowedRoles={['teacher']}>
+          <ProtectedRoute requireAuth allowedRoles={['teacher']}>
             <TeacherDashboard />
           </ProtectedRoute>
         ),
@@ -94,7 +112,7 @@ const router = createBrowserRouter([
       {
         path: 'admin',
         element: (
-          <ProtectedRoute allowedRoles={['admin']}>
+          <ProtectedRoute requireAuth allowedRoles={['admin']}>
             <AdminDashboard />
           </ProtectedRoute>
         ),

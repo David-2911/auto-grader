@@ -24,7 +24,7 @@ import {
   TrendingUp,
   Schedule,
   Star,
-  Notification,
+  Notifications,
   ChevronRight,
   Assessment,
   School,
@@ -464,7 +464,7 @@ export const StudentDashboardHome: React.FC<StudentDashboardHomeProps> = ({
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
                   <Badge badgeContent={unreadNotifications.length} color="error">
-                    <Notification sx={{ mr: 1 }} />
+                    <Notifications sx={{ mr: 1 }} />
                   </Badge>
                   Notifications
                 </Typography>

@@ -1,9 +1,13 @@
 const mysql = require('mysql2/promise');
 const { logger } = require('../utils/logger');
 
+// Load environment variables if not already loaded
+require('dotenv').config();
+
 // Enhanced database configuration with optimization
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT, 10) || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'user_management',
@@ -11,10 +15,8 @@ const dbConfig = {
   timezone: '+00:00',
   
   // Connection Pool Configuration for High Performance
+  waitForConnections: true,
   connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT) || 20,
-  acquireTimeout: 60000,
-  timeout: 60000,
-  reconnect: true,
   queueLimit: 0,
   
   // Performance optimizations
@@ -126,7 +128,7 @@ const testConnection = async () => {
     const duration = Date.now() - startTime;
     
     connectionHealthStats.totalConnections++;
-    connectionHealthStats.activeConnections = pool._allConnections.length;
+    connectionHealthStats.activeConnections = pool._allConnections ? pool._allConnections.length : 0;
     
     logger.info('Database connection established successfully', {
       duration,

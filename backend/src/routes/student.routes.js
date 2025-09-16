@@ -8,7 +8,7 @@ const { body, param, query } = require('express-validator');
 
 // Apply authentication middleware to all student routes
 router.use(authMiddleware.authenticate);
-router.use(authMiddleware.requireRole(['student']));
+router.use(authMiddleware.authorize('student'));
 
 // ==========================================
 // Dashboard and Overview Routes

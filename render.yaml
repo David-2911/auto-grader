@@ -1,0 +1,90 @@
+services:
+  - type: web
+    name: autograder-backend
+    env: docker
+    dockerfilePath: Dockerfile.backend
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        value: autograder-mysql
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        value: autograder
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: auto_grade
+      - key: REDIS_URL
+        fromService:
+          name: autograder-redis
+          type: redis
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: UPLOAD_DIR
+        value: storage
+    healthCheckPath: /api/health
+    disk:
+      name: backend-storage
+      mountPath: /app/storage
+      sizeGB: 5
+
+  - type: static
+    name: autograder-frontend
+    buildCommand: npm ci && npm run build
+    publishPath: frontend/dist
+    rootDir: frontend
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: autograder-backend
+          type: web
+          property: url
+
+  - type: pserv
+    name: autograder-mysql
+    image: mysql:8.0
+    envVars:
+      - key: MYSQL_DATABASE
+        value: auto_grade
+      - key: MYSQL_USER
+        value: autograder
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_ROOT_PASSWORD
+        sync: false
+    disk:
+      name: mysql-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+
+  - type: redis
+    name: autograder-redis
+    ipAllowList: []
+    plan: free
+
+  - type: worker
+    name: autograder-ml
+    env: docker
+    dockerfilePath: Dockerfile.ml
+    autoDeploy: false
+    plan: starter
+    envVars:
+      - key: ML_API_PORT
+        value: 5001
+      - key: JUPYTER_PORT
+        value: 8888
+      - key: JUPYTER_TOKEN
+        sync: false
+    disk:
+      name: ml-models
+      mountPath: /app/models
+      sizeGB: 2

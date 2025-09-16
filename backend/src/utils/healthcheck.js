@@ -133,19 +133,20 @@ const healthChecks = {
      * Check database connectivity
      */
     async database() {
+        // Use the detailed health endpoint which doesn't require auth
         const response = await httpRequest({
             hostname: 'localhost',
             port: process.env.PORT || 5000,
-            path: '/api/health/database',
+            path: '/api/health/detailed',
             method: 'GET'
         });
-        
+
         const data = JSON.parse(response.data);
-        if (!data.database || !data.database.connected) {
+        if (!data.checks || data.checks.database !== true) {
             throw new Error('Database not connected');
         }
-        
-        return `Database connected: ${data.database.type}`;
+
+        return `Database connectivity: OK`;
     },
 
     /**
@@ -155,16 +156,16 @@ const healthChecks = {
         const response = await httpRequest({
             hostname: 'localhost',
             port: process.env.PORT || 5000,
-            path: '/api/health/redis',
+            path: '/api/health/detailed',
             method: 'GET'
         });
-        
+
         const data = JSON.parse(response.data);
-        if (!data.redis || !data.redis.connected) {
+        if (!data.checks || data.checks.cache !== true) {
             throw new Error('Redis not connected');
         }
-        
-        return `Redis connected`;
+
+        return `Redis connectivity: OK`;
     },
 
     /**

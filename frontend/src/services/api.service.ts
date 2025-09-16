@@ -1,247 +1,275 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import { store } from '@/store';
-import { logout } from '@/store/slices/authSlice';
+import axios from 'axios';
 
-// Create axios instance
-const api: AxiosInstance = axios.create({
+// Create an axios instance with default config
+const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// Add a request interceptor to add auth token
 api.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
-    const state = store.getState();
-    const token = state.auth.token;
-    
-    if (token && config.headers) {
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
-  (error: AxiosError) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
+// Add a response interceptor to handle common errors
 api.interceptors.response.use(
-  (response: AxiosResponse) => {
-    return response;
-  },
-  (error: AxiosError) => {
-    // Handle 401 errors (unauthorized)
-    if (error.response?.status === 401) {
-      store.dispatch(logout());
+  (response) => response,
+  (error) => {
+    // Handle 401 Unauthorized errors (token expired or invalid)
+    if (error.response && error.response.status === 401) {
+      // Clear localStorage and redirect to login
+      localStorage.clear();
       window.location.href = '/login';
     }
-    
-    // Handle network errors
-    if (!error.response) {
-      console.error('Network error:', error.message);
-    }
-    
     return Promise.reject(error);
   }
 );
 
-// Generic API service class
-export class ApiService {
-  static async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response = await api.get<T>(url, config);
-    return response.data;
-  }
+/**
+ * Auth API services
+ */
+export const authService = {
+  /**
+   * Login user
+   * @param {Object} credentials - Login credentials
+   * @param {string} credentials.email - User email
+   * @param {string} credentials.password - User password
+   * @returns {Promise<Object>} Login response with token and user data
+   */
+  login: (credentials) => api.post('/auth/login', credentials),
 
-  static async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    const response = await api.post<T>(url, data, config);
-    return response.data;
-  }
+  /**
+   * Register student
+   * @param {Object} userData - Student registration data
+   * @returns {Promise<Object>} Registration response
+   */
+  registerStudent: (userData) => api.post('/auth/register/student', userData),
 
-  static async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    const response = await api.put<T>(url, data, config);
-    return response.data;
-  }
+  /**
+   * Register teacher
+   * @param {Object} userData - Teacher registration data
+   * @returns {Promise<Object>} Registration response
+   */
+  registerTeacher: (userData) => api.post('/auth/register/teacher', userData),
 
-  static async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    const response = await api.patch<T>(url, data, config);
-    return response.data;
-  }
+  /**
+   * Forgot password
+   * @param {Object} data - Forgot password data
+   * @param {string} data.email - User email
+   * @returns {Promise<Object>} Response
+   */
+  forgotPassword: (data) => api.post('/auth/forgot-password', data),
 
-  static async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response = await api.delete<T>(url, config);
-    return response.data;
-  }
+  /**
+   * Reset password
+   * @param {Object} data - Reset password data
+   * @param {string} data.token - Reset token
+   * @param {string} data.newPassword - New password
+   * @returns {Promise<Object>} Response
+   */
+  resetPassword: (data) => api.post('/auth/reset-password', data),
+};
 
-  // File upload helper
-  static async uploadFile<T>(
-    url: string,
-    file: File,
-    onProgress?: (progress: number) => void
-  ): Promise<T> {
-    const formData = new FormData();
-    formData.append('file', file);
+/**
+ * User API services
+ */
+export const userService = {
+  /**
+   * Get current user profile
+   * @returns {Promise<Object>} User profile
+   */
+  getProfile: () => api.get('/users/profile'),
 
-    const config: AxiosRequestConfig = {
+  /**
+   * Update user profile
+   * @param {Object} profileData - Profile data to update
+   * @returns {Promise<Object>} Updated profile
+   */
+  updateProfile: (profileData) => api.put('/users/profile', profileData),
+
+  /**
+   * Change password
+   * @param {Object} passwordData - Password change data
+   * @param {string} passwordData.currentPassword - Current password
+   * @param {string} passwordData.newPassword - New password
+   * @returns {Promise<Object>} Response
+   */
+  changePassword: (passwordData) => api.post('/users/change-password', passwordData),
+};
+
+/**
+ * Course API services
+ */
+export const courseService = {
+  /**
+   * Get all courses
+   * @returns {Promise<Object>} Courses list
+   */
+  getCourses: () => api.get('/courses'),
+
+  /**
+   * Get course by ID
+   * @param {number} id - Course ID
+   * @returns {Promise<Object>} Course details
+   */
+  getCourse: (id) => api.get(`/courses/${id}`),
+
+  /**
+   * Create new course (teacher only)
+   * @param {Object} courseData - Course data
+   * @returns {Promise<Object>} Created course
+   */
+  createCourse: (courseData) => api.post('/courses', courseData),
+
+  /**
+   * Update course (teacher only)
+   * @param {number} id - Course ID
+   * @param {Object} courseData - Course data to update
+   * @returns {Promise<Object>} Updated course
+   */
+  updateCourse: (id, courseData) => api.put(`/courses/${id}`, courseData),
+
+  /**
+   * Delete course (teacher only)
+   * @param {number} id - Course ID
+   * @returns {Promise<Object>} Response
+   */
+  deleteCourse: (id) => api.delete(`/courses/${id}`),
+
+  /**
+   * Enroll student in course
+   * @param {number} courseId - Course ID
+   * @returns {Promise<Object>} Response
+   */
+  enrollInCourse: (courseId) => api.post(`/courses/${courseId}/enroll`),
+};
+
+/**
+ * Assignment API services
+ */
+export const assignmentService = {
+  /**
+   * Get all assignments
+   * @returns {Promise<Object>} Assignments list
+   */
+  getAssignments: () => api.get('/assignments'),
+
+  /**
+   * Get assignments for a course
+   * @param {number} courseId - Course ID
+   * @returns {Promise<Object>} Course assignments
+   */
+  getCourseAssignments: (courseId) => api.get(`/courses/${courseId}/assignments`),
+
+  /**
+   * Get assignment by ID
+   * @param {number} id - Assignment ID
+   * @returns {Promise<Object>} Assignment details
+   */
+  getAssignment: (id) => api.get(`/assignments/${id}`),
+
+  /**
+   * Create new assignment (teacher only)
+   * @param {FormData} assignmentData - Assignment data including PDF file
+   * @returns {Promise<Object>} Created assignment
+   */
+  createAssignment: (assignmentData) => 
+    api.post('/assignments', assignmentData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      onUploadProgress: (progressEvent) => {
-        if (onProgress && progressEvent.total) {
-          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress(progress);
-        }
+    }),
+
+  /**
+   * Update assignment (teacher only)
+   * @param {number} id - Assignment ID
+   * @param {FormData} assignmentData - Assignment data to update
+   * @returns {Promise<Object>} Updated assignment
+   */
+  updateAssignment: (id, assignmentData) => 
+    api.put(`/assignments/${id}`, assignmentData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
       },
-    };
+    }),
 
-    const response = await api.post<T>(url, formData, config);
-    return response.data;
-  }
+  /**
+   * Delete assignment (teacher only)
+   * @param {number} id - Assignment ID
+   * @returns {Promise<Object>} Response
+   */
+  deleteAssignment: (id) => api.delete(`/assignments/${id}`),
 
-  // Download file helper
-  static async downloadFile(url: string, filename?: string): Promise<void> {
-    const response = await api.get(url, {
+  /**
+   * Download assignment question PDF
+   * @param {number} id - Assignment ID
+   * @returns {Promise<Blob>} PDF file as blob
+   */
+  downloadQuestionPdf: (id) => 
+    api.get(`/assignments/${id}/question-pdf`, {
       responseType: 'blob',
-    });
+    }),
+};
 
-    const blob = new Blob([response.data]);
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename || 'download';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
-  }
-}
+/**
+ * Submission API services
+ */
+export const submissionService = {
+  /**
+   * Get submissions for an assignment (teacher) or current user (student)
+   * @param {number} assignmentId - Assignment ID
+   * @returns {Promise<Object>} Submissions list
+   */
+  getSubmissions: (assignmentId) => api.get(`/assignments/${assignmentId}/submissions`),
 
-// Specific service classes
-export class AuthService extends ApiService {
-  static async login(credentials: { email: string; password: string }) {
-    return this.post('/auth/login', credentials);
-  }
+  /**
+   * Get submission by ID
+   * @param {number} id - Submission ID
+   * @returns {Promise<Object>} Submission details
+   */
+  getSubmission: (id) => api.get(`/submissions/${id}`),
 
-  static async register(userData: any) {
-    return this.post('/auth/register', userData);
-  }
+  /**
+   * Submit an assignment (student only)
+   * @param {number} assignmentId - Assignment ID
+   * @param {FormData} submissionData - Submission data including PDF file
+   * @returns {Promise<Object>} Created submission
+   */
+  submitAssignment: (assignmentId, submissionData) => 
+    api.post(`/assignments/${assignmentId}/submit`, submissionData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
 
-  static async forgotPassword(email: string) {
-    return this.post('/auth/forgot-password', { email });
-  }
+  /**
+   * Grade a submission (teacher only)
+   * @param {number} id - Submission ID
+   * @param {Object} gradingData - Grading data
+   * @param {number} gradingData.grade - Grade
+   * @param {string} gradingData.feedback - Feedback
+   * @returns {Promise<Object>} Updated submission
+   */
+  gradeSubmission: (id, gradingData) => api.post(`/submissions/${id}/grade`, gradingData),
 
-  static async resetPassword(token: string, password: string) {
-    return this.post('/auth/reset-password', { token, password });
-  }
-
-  static async getCurrentUser() {
-    return this.get('/auth/me');
-  }
-
-  static async refreshToken() {
-    return this.post('/auth/refresh');
-  }
-}
-
-export class CourseService extends ApiService {
-  static async getCourses(params?: any) {
-    return this.get('/courses', { params });
-  }
-
-  static async getCourseById(id: number) {
-    return this.get(`/courses/${id}`);
-  }
-
-  static async createCourse(courseData: any) {
-    return this.post('/courses', courseData);
-  }
-
-  static async updateCourse(id: number, courseData: any) {
-    return this.put(`/courses/${id}`, courseData);
-  }
-
-  static async deleteCourse(id: number) {
-    return this.delete(`/courses/${id}`);
-  }
-
-  static async enrollStudent(courseId: number, studentId: number) {
-    return this.post(`/courses/${courseId}/enroll`, { studentId });
-  }
-}
-
-export class AssignmentService extends ApiService {
-  static async getAssignments(params?: any) {
-    return this.get('/assignments', { params });
-  }
-
-  static async getAssignmentById(id: number) {
-    return this.get(`/assignments/${id}`);
-  }
-
-  static async createAssignment(assignmentData: any) {
-    return this.post('/assignments', assignmentData);
-  }
-
-  static async updateAssignment(id: number, assignmentData: any) {
-    return this.put(`/assignments/${id}`, assignmentData);
-  }
-
-  static async deleteAssignment(id: number) {
-    return this.delete(`/assignments/${id}`);
-  }
-}
-
-export class SubmissionService extends ApiService {
-  static async getSubmissions(params?: any) {
-    return this.get('/submissions', { params });
-  }
-
-  static async getSubmissionById(id: number) {
-    return this.get(`/submissions/${id}`);
-  }
-
-  static async createSubmission(formData: FormData) {
-    return this.post('/submissions', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  }
-
-  static async gradeSubmission(id: number, gradeData: any) {
-    return this.put(`/submissions/${id}/grade`, gradeData);
-  }
-
-  static async downloadSubmission(id: number) {
-    return this.downloadFile(`/submissions/${id}/download`);
-  }
-}
-
-export class UserService extends ApiService {
-  static async getUsers(params?: any) {
-    return this.get('/users', { params });
-  }
-
-  static async getUserById(id: number) {
-    return this.get(`/users/${id}`);
-  }
-
-  static async updateUser(id: number, userData: any) {
-    return this.put(`/users/${id}`, userData);
-  }
-
-  static async deleteUser(id: number) {
-    return this.delete(`/users/${id}`);
-  }
-
-  static async updateProfile(profileData: any) {
-    return this.put('/users/profile', profileData);
-  }
-
-  static async changePassword(passwordData: any) {
-    return this.put('/users/change-password', passwordData);
-  }
-}
+  /**
+   * Download submission PDF
+   * @param {number} id - Submission ID
+   * @returns {Promise<Blob>} PDF file as blob
+   */
+  downloadSubmissionPdf: (id) => 
+    api.get(`/submissions/${id}/pdf`, {
+      responseType: 'blob',
+    }),
+};
 
 export default api;

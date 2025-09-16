@@ -1416,4 +1416,597 @@ exports.getStudentProgress = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Delete a course
+ * @route   DELETE /api/teacher/courses/:id
+ * @access  Teacher
+ */
+exports.deleteCourse = async (req, res, next) => {
+  try {
+    const courseId = req.params.id;
+    const teacherId = req.user.id;
+    
+    await courseService.deleteCourse(courseId, teacherId);
+    
+    return res.success(null, 'Course deleted successfully');
+  } catch (error) {
+    logger.error('Delete course error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Unenroll a student from course
+ * @route   DELETE /api/teacher/courses/:id/students/:studentId
+ * @access  Teacher
+ */
+exports.unenrollStudent = async (req, res, next) => {
+  try {
+    const { id: courseId, studentId } = req.params;
+    const teacherId = req.user.id;
+    
+    await courseService.unenrollStudent(courseId, studentId, teacherId);
+    
+    return res.success(null, 'Student unenrolled successfully');
+  } catch (error) {
+    logger.error('Unenroll student error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete an assignment
+ * @route   DELETE /api/teacher/assignments/:id
+ * @access  Teacher
+ */
+exports.deleteAssignment = async (req, res, next) => {
+  try {
+    const assignmentId = req.params.id;
+    const teacherId = req.user.id;
+    
+    await assignmentService.deleteAssignment(assignmentId, teacherId);
+    
+    return res.success(null, 'Assignment deleted successfully');
+  } catch (error) {
+    logger.error('Delete assignment error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete an assignment category
+ * @route   DELETE /api/teacher/categories/:id
+ * @access  Teacher
+ */
+exports.deleteAssignmentCategory = async (req, res, next) => {
+  try {
+    const categoryId = req.params.id;
+    const teacherId = req.user.id;
+    
+    await assignmentService.deleteCategory(categoryId, teacherId);
+    
+    return res.success(null, 'Assignment category deleted successfully');
+  } catch (error) {
+    logger.error('Delete assignment category error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete an announcement
+ * @route   DELETE /api/teacher/announcements/:id
+ * @access  Teacher
+ */
+exports.deleteAnnouncement = async (req, res, next) => {
+  try {
+    const announcementId = req.params.id;
+    const teacherId = req.user.id;
+    
+    await communicationService.deleteAnnouncement(announcementId, teacherId);
+    
+    return res.success(null, 'Announcement deleted successfully');
+  } catch (error) {
+    logger.error('Delete announcement error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete a template
+ * @route   DELETE /api/teacher/templates/:id
+ * @access  Teacher
+ */
+exports.deleteTemplate = async (req, res, next) => {
+  try {
+    const templateId = req.params.id;
+    const teacherId = req.user.id;
+    
+    await assignmentService.deleteTemplate(templateId, teacherId);
+    
+    return res.success(null, 'Template deleted successfully');
+  } catch (error) {
+    logger.error('Delete template error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get assignment categories for a course
+ * @route   GET /api/teacher/courses/:courseId/categories
+ * @access  Teacher
+ */
+exports.getAssignmentCategories = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    
+    const categories = await assignmentService.getCategories(courseId, teacherId);
+    
+    return res.success(categories, 'Assignment categories retrieved successfully');
+  } catch (error) {
+    logger.error('Get assignment categories error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Create assignment category
+ * @route   POST /api/teacher/courses/:courseId/categories
+ * @access  Teacher
+ */
+exports.createAssignmentCategory = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    const categoryData = req.body;
+    
+    const category = await assignmentService.createCategory(courseId, categoryData, teacherId);
+    
+    return res.success(category, 'Assignment category created successfully');
+  } catch (error) {
+    logger.error('Create assignment category error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update assignment category
+ * @route   PUT /api/teacher/categories/:id
+ * @access  Teacher
+ */
+exports.updateAssignmentCategory = async (req, res, next) => {
+  try {
+    const categoryId = req.params.id;
+    const teacherId = req.user.id;
+    const categoryData = req.body;
+    
+    const category = await assignmentService.updateCategory(categoryId, categoryData, teacherId);
+    
+    return res.success(category, 'Assignment category updated successfully');
+  } catch (error) {
+    logger.error('Update assignment category error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get student profile
+ * @route   GET /api/teacher/students/:id
+ * @access  Teacher
+ */
+exports.getStudentProfile = async (req, res, next) => {
+  try {
+    const studentId = req.params.id;
+    const teacherId = req.user.id;
+    
+    const profile = await studentManagementService.getStudentProfile(studentId, teacherId);
+    
+    return res.success(profile, 'Student profile retrieved successfully');
+  } catch (error) {
+    logger.error('Get student profile error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get student submissions
+ * @route   GET /api/teacher/students/:id/submissions
+ * @access  Teacher
+ */
+exports.getStudentSubmissions = async (req, res, next) => {
+  try {
+    const studentId = req.params.id;
+    const teacherId = req.user.id;
+    
+    const submissions = await submissionService.getStudentSubmissions(studentId, teacherId);
+    
+    return res.success(submissions, 'Student submissions retrieved successfully');
+  } catch (error) {
+    logger.error('Get student submissions error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Add student note
+ * @route   POST /api/teacher/students/:id/notes
+ * @access  Teacher
+ */
+exports.addStudentNote = async (req, res, next) => {
+  try {
+    const studentId = req.params.id;
+    const teacherId = req.user.id;
+    const noteData = req.body;
+    
+    const note = await studentManagementService.addStudentNote(studentId, noteData, teacherId);
+    
+    return res.success(note, 'Student note added successfully');
+  } catch (error) {
+    logger.error('Add student note error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get course attendance
+ * @route   GET /api/teacher/courses/:courseId/attendance
+ * @access  Teacher
+ */
+exports.getCourseAttendance = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    
+    const attendance = await courseManagementService.getCourseAttendance(courseId, teacherId);
+    
+    return res.success(attendance, 'Course attendance retrieved successfully');
+  } catch (error) {
+    logger.error('Get course attendance error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Record attendance
+ * @route   POST /api/teacher/courses/:courseId/attendance
+ * @access  Teacher
+ */
+exports.recordAttendance = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    const attendanceData = req.body;
+    
+    const attendance = await courseManagementService.recordAttendance(courseId, attendanceData, teacherId);
+    
+    return res.success(attendance, 'Attendance recorded successfully');
+  } catch (error) {
+    logger.error('Record attendance error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get assignment submissions
+ * @route   GET /api/teacher/assignments/:id/submissions
+ * @access  Teacher
+ */
+exports.getAssignmentSubmissions = async (req, res, next) => {
+  try {
+    const assignmentId = req.params.id;
+    const teacherId = req.user.id;
+    
+    const submissions = await submissionService.getAssignmentSubmissions(assignmentId, teacherId);
+    
+    return res.success(submissions, 'Assignment submissions retrieved successfully');
+  } catch (error) {
+    logger.error('Get assignment submissions error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Auto grade assignment
+ * @route   POST /api/teacher/assignments/:id/auto-grade
+ * @access  Teacher
+ */
+exports.autoGradeAssignment = async (req, res, next) => {
+  try {
+    const assignmentId = req.params.id;
+    const teacherId = req.user.id;
+    
+    const result = await gradingService.autoGradeAssignment(assignmentId, teacherId);
+    
+    return res.success(result, 'Auto grading initiated successfully');
+  } catch (error) {
+    logger.error('Auto grade assignment error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get grade appeals
+ * @route   GET /api/teacher/grade-appeals
+ * @access  Teacher
+ */
+exports.getGradeAppeals = async (req, res, next) => {
+  try {
+    const teacherId = req.user.id;
+    
+    const appeals = await gradingService.getGradeAppeals(teacherId);
+    
+    return res.success(appeals, 'Grade appeals retrieved successfully');
+  } catch (error) {
+    logger.error('Get grade appeals error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Handle grade appeal
+ * @route   PUT /api/teacher/grade-appeals/:id
+ * @access  Teacher
+ */
+exports.handleGradeAppeal = async (req, res, next) => {
+  try {
+    const appealId = req.params.id;
+    const teacherId = req.user.id;
+    const appealData = req.body;
+    
+    const result = await gradingService.handleGradeAppeal(appealId, appealData, teacherId);
+    
+    return res.success(result, 'Grade appeal handled successfully');
+  } catch (error) {
+    logger.error('Handle grade appeal error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get class performance analytics
+ * @route   GET /api/teacher/analytics/class-performance/:courseId
+ * @access  Teacher
+ */
+exports.getClassPerformance = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    
+    const performance = await analyticsService.getClassPerformance(courseId, teacherId);
+    
+    return res.success(performance, 'Class performance analytics retrieved successfully');
+  } catch (error) {
+    logger.error('Get class performance error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get assignment difficulty analytics
+ * @route   GET /api/teacher/analytics/assignment-difficulty/:assignmentId
+ * @access  Teacher
+ */
+exports.getAssignmentDifficulty = async (req, res, next) => {
+  try {
+    const assignmentId = req.params.assignmentId;
+    const teacherId = req.user.id;
+    
+    const difficulty = await analyticsService.getAssignmentDifficulty(assignmentId, teacherId);
+    
+    return res.success(difficulty, 'Assignment difficulty analytics retrieved successfully');
+  } catch (error) {
+    logger.error('Get assignment difficulty error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get student progress analytics
+ * @route   GET /api/teacher/analytics/student-progress/:courseId
+ * @access  Teacher
+ */
+exports.getStudentProgressAnalytics = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    
+    const progress = await analyticsService.getStudentProgressAnalytics(courseId, teacherId);
+    
+    return res.success(progress, 'Student progress analytics retrieved successfully');
+  } catch (error) {
+    logger.error('Get student progress analytics error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get grading trends analytics
+ * @route   GET /api/teacher/analytics/grading-trends
+ * @access  Teacher
+ */
+exports.getGradingTrends = async (req, res, next) => {
+  try {
+    const teacherId = req.user.id;
+    
+    const trends = await analyticsService.getGradingTrends(teacherId);
+    
+    return res.success(trends, 'Grading trends analytics retrieved successfully');
+  } catch (error) {
+    logger.error('Get grading trends error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Generate course performance report
+ * @route   GET /api/teacher/reports/course/:courseId/performance
+ * @access  Teacher
+ */
+exports.generateCoursePerformanceReport = async (req, res, next) => {
+  try {
+    const courseId = req.params.courseId;
+    const teacherId = req.user.id;
+    
+    const report = await reportService.generateCoursePerformanceReport(courseId, teacherId);
+    
+    return res.success(report, 'Course performance report generated successfully');
+  } catch (error) {
+    logger.error('Generate course performance report error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Generate assignment report
+ * @route   GET /api/teacher/reports/assignment/:assignmentId/results
+ * @access  Teacher
+ */
+exports.generateAssignmentReport = async (req, res, next) => {
+  try {
+    const assignmentId = req.params.assignmentId;
+    const teacherId = req.user.id;
+    
+    const report = await reportService.generateAssignmentReport(assignmentId, teacherId);
+    
+    return res.success(report, 'Assignment report generated successfully');
+  } catch (error) {
+    logger.error('Generate assignment report error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Generate student progress report
+ * @route   GET /api/teacher/reports/student/:studentId/progress
+ * @access  Teacher
+ */
+exports.generateStudentProgressReport = async (req, res, next) => {
+  try {
+    const studentId = req.params.studentId;
+    const teacherId = req.user.id;
+    
+    const report = await reportService.generateStudentProgressReport(studentId, teacherId);
+    
+    return res.success(report, 'Student progress report generated successfully');
+  } catch (error) {
+    logger.error('Generate student progress report error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Generate custom report
+ * @route   POST /api/teacher/reports/custom
+ * @access  Teacher
+ */
+exports.generateCustomReport = async (req, res, next) => {
+  try {
+    const teacherId = req.user.id;
+    const reportConfig = req.body;
+    
+    const report = await reportService.generateCustomReport(reportConfig, teacherId);
+    
+    return res.success(report, 'Custom report generated successfully');
+  } catch (error) {
+    logger.error('Generate custom report error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get templates
+ * @route   GET /api/teacher/templates
+ * @access  Teacher
+ */
+exports.getTemplates = async (req, res, next) => {
+  try {
+    const teacherId = req.user.id;
+    
+    const templates = await assignmentService.getTemplates(teacherId);
+    
+    return res.success(templates, 'Templates retrieved successfully');
+  } catch (error) {
+    logger.error('Get templates error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Create template
+ * @route   POST /api/teacher/templates
+ * @access  Teacher
+ */
+exports.createTemplate = async (req, res, next) => {
+  try {
+    const teacherId = req.user.id;
+    const templateData = req.body;
+    
+    const template = await assignmentService.createTemplate(templateData, teacherId);
+    
+    return res.success(template, 'Template created successfully');
+  } catch (error) {
+    logger.error('Create template error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update template
+ * @route   PUT /api/teacher/templates/:id
+ * @access  Teacher
+ */
+exports.updateTemplate = async (req, res, next) => {
+  try {
+    const templateId = req.params.id;
+    const teacherId = req.user.id;
+    const templateData = req.body;
+    
+    const template = await assignmentService.updateTemplate(templateId, templateData, teacherId);
+    
+    return res.success(template, 'Template updated successfully');
+  } catch (error) {
+    logger.error('Update template error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Batch grade submissions
+ * @route   POST /api/teacher/assignments/:id/batch-grade
+ * @access  Teacher
+ */
+exports.batchGradeSubmissions = async (req, res, next) => {
+  try {
+    const assignmentId = req.params.id;
+    const teacherId = req.user.id;
+    const gradingData = req.body;
+    
+    const result = await gradingService.batchGradeSubmissions(assignmentId, gradingData, teacherId);
+    
+    return res.success(result, 'Batch grading completed successfully');
+  } catch (error) {
+    logger.error('Batch grade submissions error:', error);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Batch update assignments
+ * @route   PUT /api/teacher/assignments/batch-update
+ * @access  Teacher
+ */
+exports.batchUpdateAssignments = async (req, res, next) => {
+  try {
+    const teacherId = req.user.id;
+    const updateData = req.body;
+    
+    const result = await assignmentService.batchUpdateAssignments(updateData, teacherId);
+    
+    return res.success(result, 'Batch update completed successfully');
+  } catch (error) {
+    logger.error('Batch update assignments error:', error);
+    next(error);
+  }
+};
+
 // Add remaining controller implementations as needed...

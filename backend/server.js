@@ -17,16 +17,17 @@ const {
   createAdaptiveRateLimit,
   validateRequestSize,
   cacheOptimizationMiddleware,
-  intelligentCompression,
   performanceErrorHandler
 } = require('./src/middleware/performance.middleware');
 
 // Load environment variables
 dotenv.config();
+console.log('DEBUG: Environment loaded, starting app setup...');
 
 // Initialize express app
 const app = express();
 const PORT = process.env.PORT || 5000;
+console.log('DEBUG: Express app created, PORT:', PORT);
 
 // Trust proxy for correct IP addresses in load balanced environments
 app.set('trust proxy', 1);
@@ -48,6 +49,7 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false
 }));
+console.log('DEBUG: Helmet middleware setup');
 
 // CORS configuration with performance considerations
 app.use(cors({
@@ -62,6 +64,7 @@ app.use(cors({
   credentials: true,
   maxAge: 86400 // Cache preflight requests for 24 hours
 }));
+console.log('DEBUG: CORS middleware setup');
 
 // Compression middleware with intelligent compression
 app.use(compression({
@@ -120,15 +123,26 @@ app.use('/storage', express.static(path.join(__dirname, 'storage'), {
   }
 }));
 
+console.log('DEBUG: About to import routes...');
 // Import routes
 const authRoutes = require('./src/routes/auth.routes');
+console.log('DEBUG: Auth routes loaded');
 const userRoutes = require('./src/routes/user.routes');
+console.log('DEBUG: User routes loaded');
 const assignmentRoutes = require('./src/routes/assignment.routes');
+console.log('DEBUG: Assignment routes loaded');
 const adminRoutes = require('./src/routes/admin.routes');
+console.log('DEBUG: Admin routes loaded');
 const teacherRoutes = require('./src/routes/teacher.routes');
+console.log('DEBUG: Teacher routes loaded');
 const studentRoutes = require('./src/routes/student.routes');
+console.log('DEBUG: Student routes loaded');
 const fileRoutes = require('./src/routes/file.routes');
+console.log('DEBUG: File routes loaded');
 const performanceRoutes = require('./src/routes/performance.routes');
+console.log('DEBUG: Performance routes loaded');
+
+console.log('DEBUG: Setting up API routes...');
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -176,7 +190,7 @@ app.get('/api/health/detailed', async (req, res) => {
 
   res.status(allHealthy ? 200 : 503).json({
     status: allHealthy ? 'UP' : 'DEGRADED',
-    checks: healthChecks,
+  checks: healthChecks,
     timestamp: new Date(),
     uptime: process.uptime()
   });
@@ -287,37 +301,64 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
-  gracefulShutdown('uncaughtException');
+  console.error('DEBUG: Uncaught Exception:', error.message);
+  console.error('DEBUG: Stack:', error.stack);
+  // Don't exit immediately - let's see what's happening
+  // gracefulShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('unhandledRejection');
+  console.error('DEBUG: Unhandled Rejection:', reason);
+  // Don't exit immediately - let's see what's happening
+  // gracefulShutdown('unhandledRejection');
 });
 
 // Start server with enhanced initialization
+const waitForDatabase = async (retries = 20, delayMs = 3000) => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const ok = await testConnection();
+      if (ok) return true;
+    } catch (e) {
+      // ignore, will retry
+    }
+    logger.warn(`Database not ready yet (attempt ${attempt}/${retries}). Retrying in ${delayMs}ms...`);
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return false;
+};
+
 const startServer = async () => {
+  console.log('DEBUG: Starting server...');
   try {
-    // Test database connection
-    const dbConnected = await testConnection();
+    console.log('DEBUG: Waiting for database...');
+    // Wait for database to be ready with retries
+    const dbConnected = await waitForDatabase();
     if (!dbConnected) {
-      logger.error('Failed to connect to database. Exiting...');
+      logger.error('Failed to connect to database after retries. Exiting...');
       process.exit(1);
     }
+    console.log('DEBUG: Database connected');
 
+    console.log('DEBUG: Connecting to cache...');
     // Initialize cache
     const cacheConnected = await cacheManager.connect();
     if (!cacheConnected) {
       logger.warn('Failed to connect to cache. Continuing without cache...');
     }
+    console.log('DEBUG: Cache connected');
 
+    console.log('DEBUG: Starting HTTP server...');
     // Start HTTP server
     const server = app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
       logger.info(`Health check available at http://localhost:${PORT}/api/health`);
       logger.info(`Performance metrics at http://localhost:${PORT}/api/metrics`);
+      console.log('DEBUG: Server is listening on port', PORT);
     });
 
+    console.log('DEBUG: Setting server timeouts...');
     // Set server timeouts for better performance
     server.timeout = 30000; // 30 seconds
     server.keepAliveTimeout = 65000; // 65 seconds
@@ -336,20 +377,3 @@ if (require.main === module) {
 }
 
 module.exports = { app, startServer };
-      logger.error('Failed to connect to database. Server not started.');
-      process.exit(1);
-    }
-
-    app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
-      logger.info(`Environment: ${process.env.NODE_ENV}`);
-    });
-  } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
-
-startServer();
-
-module.exports = app; // For testing purposes

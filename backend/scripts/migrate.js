@@ -20,13 +20,20 @@ const bcrypt = require('bcrypt');
 const { logger } = require('../src/utils/logger');
 require('dotenv').config();
 
-// Database configuration
+// Database configuration (include port so dev env on 3307 works)
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   multipleStatements: true
 };
+
+logger.info('Database connection parameters (excluding password)', {
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user
+});
 
 /**
  * Execute SQL file
@@ -314,9 +321,21 @@ async function migrate() {
       await connection.query('DROP DATABASE IF EXISTS auto_grade');
     }
     
-    // Execute the comprehensive schema SQL
+  // Execute the comprehensive schema SQL
     const schemaPath = path.join(__dirname, '../src/config/comprehensive_schema.sql');
     await executeSqlFile(schemaPath, connection);
+    
+  // Apply auth/security schema (adds auth_logs, user_sessions, etc.)
+  const authSchemaPath = path.join(__dirname, '../src/config/auth_security_schema.sql');
+  await executeSqlFile(authSchemaPath, connection);
+    
+  // Ensure refresh_tokens table exists (idempotent)
+  const refreshTokensPath = path.join(__dirname, '../src/config/refresh_tokens_schema.sql');
+  await executeSqlFile(refreshTokensPath, connection);
+    
+  // Apply core performance tables (api_usage_tracking, performance_metrics)
+  const perfCorePath = path.join(__dirname, '../src/config/performance_core_schema.sql');
+  await executeSqlFile(perfCorePath, connection);
     
     // Seed the database with test data
     await seedDatabase(connection);

@@ -140,14 +140,6 @@ class EnhancedTeacherService {
   // Dashboard and Analytics
   async getDashboardData(useCache: boolean = true): Promise<TeacherDashboardData> {
     const config: AxiosRequestConfig = {
-      metadata: {
-        endpoint: 'teacher_dashboard',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-        cacheKey: useCache ? 'teacher_dashboard' : undefined,
-      },
     };
 
     const response = await apiCore.get<ApiResponse<TeacherDashboardData>>('/teacher/dashboard', config);
@@ -164,14 +156,6 @@ class EnhancedTeacherService {
       `/teacher/courses/${courseId}/analytics`,
       {
         params,
-        metadata: {
-          endpoint: 'class_analytics',
-          method: 'GET',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'normal',
-          cacheKey: `analytics_${courseId}_${JSON.stringify(params)}`,
-        },
       }
     );
 
@@ -182,13 +166,6 @@ class EnhancedTeacherService {
     const response = await apiCore.get(`/teacher/courses/${courseId}/export`, {
       params: { format },
       responseType: 'blob',
-      metadata: {
-        endpoint: 'class_export',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-      },
     });
 
     return response.data;
@@ -202,14 +179,6 @@ class EnhancedTeacherService {
   }): Promise<Course[]> {
     const response = await apiCore.get<ApiResponse<Course[]>>('/teacher/courses', {
       params: filters,
-      metadata: {
-        endpoint: 'teacher_courses',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `teacher_courses_${JSON.stringify(filters)}`,
-      },
     });
 
     return response.data.data!;
@@ -217,14 +186,6 @@ class EnhancedTeacherService {
 
   async getCourse(id: number): Promise<Course> {
     const response = await apiCore.get<ApiResponse<Course>>(`/teacher/courses/${id}`, {
-      metadata: {
-        endpoint: 'teacher_course_detail',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `teacher_course_${id}`,
-      },
     });
 
     return response.data.data!;
@@ -232,13 +193,6 @@ class EnhancedTeacherService {
 
   async createCourse(data: CourseCreateData): Promise<Course> {
     const response = await apiCore.post<ApiResponse<Course>>('/teacher/courses', data, {
-      metadata: {
-        endpoint: 'create_course',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     // Clear courses cache
@@ -249,13 +203,6 @@ class EnhancedTeacherService {
 
   async updateCourse(id: number, data: Partial<CourseCreateData>): Promise<Course> {
     const response = await apiCore.put<ApiResponse<Course>>(`/teacher/courses/${id}`, data, {
-      metadata: {
-        endpoint: 'update_course',
-        method: 'PUT',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     // Clear specific course cache
@@ -266,13 +213,6 @@ class EnhancedTeacherService {
 
   async deleteCourse(id: number): Promise<void> {
     await apiCore.delete(`/teacher/courses/${id}`, {
-      metadata: {
-        endpoint: 'delete_course',
-        method: 'DELETE',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     await this.clearCoursesCache();
@@ -281,14 +221,6 @@ class EnhancedTeacherService {
   // Student Management
   async getCourseStudents(courseId: number): Promise<User[]> {
     const response = await apiCore.get<ApiResponse<User[]>>(`/teacher/courses/${courseId}/students`, {
-      metadata: {
-        endpoint: 'course_students',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `course_students_${courseId}`,
-      },
     });
 
     return response.data.data!;
@@ -298,13 +230,6 @@ class EnhancedTeacherService {
     await apiCore.post(`/teacher/courses/${courseId}/students`, {
       studentEmail,
     }, {
-      metadata: {
-        endpoint: 'add_student',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     await this.clearCourseStudentsCache(courseId);
@@ -312,13 +237,6 @@ class EnhancedTeacherService {
 
   async removeStudentFromCourse(courseId: number, studentId: number): Promise<void> {
     await apiCore.delete(`/teacher/courses/${courseId}/students/${studentId}`, {
-      metadata: {
-        endpoint: 'remove_student',
-        method: 'DELETE',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     await this.clearCourseStudentsCache(courseId);
@@ -333,13 +251,6 @@ class EnhancedTeacherService {
       `/teacher/courses/${courseId}/students/bulk`,
       { studentEmails },
       {
-        metadata: {
-          endpoint: 'bulk_add_students',
-          method: 'POST',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'high',
-        },
       }
     );
 
@@ -361,14 +272,6 @@ class EnhancedTeacherService {
 
     const response = await apiCore.get<ApiResponse<Assignment[]>>('/teacher/assignments', {
       params,
-      metadata: {
-        endpoint: 'teacher_assignments',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `teacher_assignments_${JSON.stringify(params)}`,
-      },
     });
 
     return response.data.data!;
@@ -376,14 +279,6 @@ class EnhancedTeacherService {
 
   async getAssignment(id: number): Promise<Assignment> {
     const response = await apiCore.get<ApiResponse<Assignment>>(`/teacher/assignments/${id}`, {
-      metadata: {
-        endpoint: 'teacher_assignment_detail',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `teacher_assignment_${id}`,
-      },
     });
 
     return response.data.data!;
@@ -410,14 +305,6 @@ class EnhancedTeacherService {
     const config: AxiosRequestConfig = {
       headers: {
         'Content-Type': 'multipart/form-data',
-      },
-      metadata: {
-        endpoint: 'create_assignment',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-        skipLoading: true,
       },
       onUploadProgress: (progressEvent: any) => {
         if (onProgress && progressEvent.total) {
@@ -461,14 +348,6 @@ class EnhancedTeacherService {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      metadata: {
-        endpoint: 'update_assignment',
-        method: 'PUT',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-        skipLoading: true,
-      },
       onUploadProgress: (progressEvent: any) => {
         if (onProgress && progressEvent.total) {
           const progress: FileUploadProgress = {
@@ -496,13 +375,6 @@ class EnhancedTeacherService {
 
   async deleteAssignment(id: number): Promise<void> {
     await apiCore.delete(`/teacher/assignments/${id}`, {
-      metadata: {
-        endpoint: 'delete_assignment',
-        method: 'DELETE',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     await this.clearAssignmentsCache();
@@ -513,13 +385,6 @@ class EnhancedTeacherService {
       `/teacher/assignments/${id}/publish`,
       {},
       {
-        metadata: {
-          endpoint: 'publish_assignment',
-          method: 'POST',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'high',
-        },
       }
     );
 
@@ -533,13 +398,6 @@ class EnhancedTeacherService {
       `/teacher/assignments/${id}/duplicate`,
       { newCourseId },
       {
-        metadata: {
-          endpoint: 'duplicate_assignment',
-          method: 'POST',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'normal',
-        },
       }
     );
 
@@ -559,14 +417,6 @@ class EnhancedTeacherService {
 
     const response = await apiCore.get<ApiResponse<Submission[]>>('/teacher/submissions', {
       params,
-      metadata: {
-        endpoint: 'assignment_submissions',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `submissions_${JSON.stringify(params)}`,
-      },
     });
 
     return response.data.data!;
@@ -574,14 +424,6 @@ class EnhancedTeacherService {
 
   async getSubmission(id: number): Promise<Submission> {
     const response = await apiCore.get<ApiResponse<Submission>>(`/teacher/submissions/${id}`, {
-      metadata: {
-        endpoint: 'submission_detail',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: `submission_${id}`,
-      },
     });
 
     return response.data.data!;
@@ -592,13 +434,6 @@ class EnhancedTeacherService {
       `/teacher/submissions/${id}/grade`,
       gradingData,
       {
-        metadata: {
-          endpoint: 'grade_submission',
-          method: 'POST',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'high',
-        },
       }
     );
 
@@ -613,13 +448,6 @@ class EnhancedTeacherService {
     errors: Record<string, string>;
   }> {
     const response = await apiCore.post<ApiResponse<any>>('/teacher/submissions/bulk-grade', data, {
-      metadata: {
-        endpoint: 'bulk_grade',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
 
     // Clear submission caches
@@ -631,13 +459,6 @@ class EnhancedTeacherService {
   async downloadSubmission(id: number): Promise<Blob> {
     const response = await apiCore.get(`/teacher/submissions/${id}/download`, {
       responseType: 'blob',
-      metadata: {
-        endpoint: 'download_submission',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-      },
     });
 
     return response.data;
@@ -647,13 +468,6 @@ class EnhancedTeacherService {
     const response = await apiCore.get(`/teacher/assignments/${assignmentId}/submissions/download`, {
       params: { format },
       responseType: 'blob',
-      metadata: {
-        endpoint: 'download_all_submissions',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-      },
     });
 
     return response.data;
@@ -667,13 +481,6 @@ class EnhancedTeacherService {
       `/teacher/assignments/${assignmentId}/auto-grade`,
       options,
       {
-        metadata: {
-          endpoint: 'auto_grade',
-          method: 'POST',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'high',
-        },
       }
     );
 
@@ -687,13 +494,6 @@ class EnhancedTeacherService {
     error?: string;
   }> {
     const response = await apiCore.get<ApiResponse<any>>(`/teacher/auto-grade/status/${jobId}`, {
-      metadata: {
-        endpoint: 'auto_grade_status',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-      },
     });
 
     return response.data.data!;
@@ -702,14 +502,6 @@ class EnhancedTeacherService {
   // Rubric Management
   async getRubrics(): Promise<GradingRubric[]> {
     const response = await apiCore.get<ApiResponse<GradingRubric[]>>('/teacher/rubrics', {
-      metadata: {
-        endpoint: 'rubrics',
-        method: 'GET',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        cacheKey: 'teacher_rubrics',
-      },
     });
 
     return response.data.data!;
@@ -717,13 +509,6 @@ class EnhancedTeacherService {
 
   async createRubric(rubric: Omit<GradingRubric, 'id'>): Promise<GradingRubric> {
     const response = await apiCore.post<ApiResponse<GradingRubric>>('/teacher/rubrics', rubric, {
-      metadata: {
-        endpoint: 'create_rubric',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-      },
     });
 
     await this.clearRubricsCache();
@@ -736,13 +521,6 @@ class EnhancedTeacherService {
       `/teacher/rubrics/${id}`,
       rubric,
       {
-        metadata: {
-          endpoint: 'update_rubric',
-          method: 'PUT',
-          timestamp: Date.now(),
-          retryCount: 0,
-          priority: 'normal',
-        },
       }
     );
 
@@ -753,13 +531,6 @@ class EnhancedTeacherService {
 
   async deleteRubric(id: string): Promise<void> {
     await apiCore.delete(`/teacher/rubrics/${id}`, {
-      metadata: {
-        endpoint: 'delete_rubric',
-        method: 'DELETE',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-      },
     });
 
     await this.clearRubricsCache();
@@ -773,13 +544,6 @@ class EnhancedTeacherService {
     scheduledFor?: string;
   }): Promise<void> {
     await apiCore.post(`/teacher/courses/${courseId}/announcements`, data, {
-      metadata: {
-        endpoint: 'send_announcement',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
   }
 
@@ -790,13 +554,6 @@ class EnhancedTeacherService {
     assignmentId?: number;
   }): Promise<void> {
     await apiCore.post(`/teacher/students/${studentId}/message`, data, {
-      metadata: {
-        endpoint: 'send_message',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'high',
-      },
     });
   }
 
@@ -811,14 +568,6 @@ class EnhancedTeacherService {
     const config: AxiosRequestConfig = {
       headers: {
         'Content-Type': 'multipart/form-data',
-      },
-      metadata: {
-        endpoint: 'upload_question',
-        method: 'POST',
-        timestamp: Date.now(),
-        retryCount: 0,
-        priority: 'normal',
-        skipLoading: true,
       },
       onUploadProgress: (progressEvent: any) => {
         if (onProgress && progressEvent.total) {

@@ -29,7 +29,7 @@ CREATE TABLE users (
 
 -- User profile extensions for different user types
 CREATE TABLE student_profiles (
-    id INT PRIMARY KEY,
+    id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL UNIQUE,
     year_level VARCHAR(50) NULL,
     major VARCHAR(100) NULL,

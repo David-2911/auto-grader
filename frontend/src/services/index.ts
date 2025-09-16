@@ -2,9 +2,8 @@
  * API Services Index
  * 
  * This file provides a clean interface for importing API services and utilities
- * throughout the applicatio    });
-  },
-};
+ * throughout the application
+ */
 
 // Main API integration export
 export {
